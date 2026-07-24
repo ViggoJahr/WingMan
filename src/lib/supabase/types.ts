@@ -167,6 +167,44 @@ export type Database = {
         }
         Relationships: []
       }
+      external_plan_items: {
+        Row: {
+          external_id: string
+          external_source: string
+          id: string
+          payload: Json
+          resource_type: string
+          synced_at: string
+          user_id: string
+        }
+        Insert: {
+          external_id: string
+          external_source: string
+          id?: string
+          payload: Json
+          resource_type: string
+          synced_at?: string
+          user_id: string
+        }
+        Update: {
+          external_id?: string
+          external_source?: string
+          id?: string
+          payload?: Json
+          resource_type?: string
+          synced_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_plan_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       handball_sessions: {
         Row: {
           comments: string | null
@@ -334,6 +372,50 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "cardio_sessions"
             referencedColumns: ["session_id"]
+          },
+        ]
+      }
+      mas_tests: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          external_source: string | null
+          id: string
+          mas_mps: number | null
+          raw_payload: Json | null
+          test_date: string
+          test_time_seconds: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          mas_mps?: number | null
+          raw_payload?: Json | null
+          test_date: string
+          test_time_seconds?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          mas_mps?: number | null
+          raw_payload?: Json | null
+          test_date?: string
+          test_time_seconds?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mas_tests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -530,6 +612,59 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: true
             referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strength_test_results: {
+        Row: {
+          created_at: string
+          estimated_1rm: number | null
+          external_id: string | null
+          external_source: string | null
+          id: string
+          raw_payload: Json | null
+          reps: number | null
+          test_date: string
+          test_type: string
+          user_id: string
+          verification_status: string | null
+          weight: number | null
+        }
+        Insert: {
+          created_at?: string
+          estimated_1rm?: number | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          raw_payload?: Json | null
+          reps?: number | null
+          test_date: string
+          test_type: string
+          user_id: string
+          verification_status?: string | null
+          weight?: number | null
+        }
+        Update: {
+          created_at?: string
+          estimated_1rm?: number | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          raw_payload?: Json | null
+          reps?: number | null
+          test_date?: string
+          test_type?: string
+          user_id?: string
+          verification_status?: string | null
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strength_test_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
