@@ -4,9 +4,9 @@ import { signOut } from "@/app/login/actions"
 
 const links = [
   { href: "/", label: "Home" },
-  { href: "/log/practice", label: "Log practice" },
-  { href: "/log/match", label: "Log match" },
-  { href: "/log/readiness", label: "Readiness" },
+  { href: "/training-load", label: "Training load" },
+  { href: "/readiness", label: "Readiness" },
+  { href: "/handball", label: "Handball" },
 ]
 
 export function Nav() {
