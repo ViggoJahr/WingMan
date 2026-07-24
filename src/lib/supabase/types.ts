@@ -429,6 +429,7 @@ export type Database = {
           importance: number | null
           is_home: boolean | null
           nine_m_shots: number | null
+          opponent: string | null
           opposition_difficulty: number | null
           play_time_min: number | null
           session_id: string
@@ -448,6 +449,7 @@ export type Database = {
           importance?: number | null
           is_home?: boolean | null
           nine_m_shots?: number | null
+          opponent?: string | null
           opposition_difficulty?: number | null
           play_time_min?: number | null
           session_id: string
@@ -467,6 +469,7 @@ export type Database = {
           importance?: number | null
           is_home?: boolean | null
           nine_m_shots?: number | null
+          opponent?: string | null
           opposition_difficulty?: number | null
           play_time_min?: number | null
           session_id?: string
@@ -497,6 +500,7 @@ export type Database = {
           mental_stress: number | null
           mood: number | null
           muscle_soreness: number | null
+          notes: string | null
           recovery_energy: number | null
           sleep_quality: number | null
           total_score: number | null
@@ -512,6 +516,7 @@ export type Database = {
           mental_stress?: number | null
           mood?: number | null
           muscle_soreness?: number | null
+          notes?: string | null
           recovery_energy?: number | null
           sleep_quality?: number | null
           total_score?: number | null
@@ -527,6 +532,7 @@ export type Database = {
           mental_stress?: number | null
           mood?: number | null
           muscle_soreness?: number | null
+          notes?: string | null
           recovery_energy?: number | null
           sleep_quality?: number | null
           total_score?: number | null
