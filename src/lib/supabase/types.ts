@@ -43,6 +43,8 @@ export type Database = {
       body_metrics: {
         Row: {
           date: string
+          external_id: string | null
+          external_source: string | null
           height_cm: number | null
           id: string
           user_id: string | null
@@ -50,6 +52,8 @@ export type Database = {
         }
         Insert: {
           date: string
+          external_id?: string | null
+          external_source?: string | null
           height_cm?: number | null
           id?: string
           user_id?: string | null
@@ -57,6 +61,8 @@ export type Database = {
         }
         Update: {
           date?: string
+          external_id?: string | null
+          external_source?: string | null
           height_cm?: number | null
           id?: string
           user_id?: string | null
@@ -97,6 +103,50 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: true
             referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_metrics: {
+        Row: {
+          created_at: string
+          date: string
+          external_id: string | null
+          external_source: string | null
+          id: string
+          raw_payload: Json | null
+          resting_heart_rate: number | null
+          steps: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          raw_payload?: Json | null
+          resting_heart_rate?: number | null
+          steps?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          raw_payload?: Json | null
+          resting_heart_rate?: number | null
+          steps?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_metrics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -592,6 +642,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sleep_logs: {
+        Row: {
+          created_at: string
+          duration_minutes: number | null
+          end_time: string | null
+          external_id: string | null
+          external_source: string | null
+          id: string
+          raw_payload: Json | null
+          sleep_stages: Json | null
+          start_time: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_minutes?: number | null
+          end_time?: string | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          raw_payload?: Json | null
+          sleep_stages?: Json | null
+          start_time: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_minutes?: number | null
+          end_time?: string | null
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          raw_payload?: Json | null
+          sleep_stages?: Json | null
+          start_time?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sleep_logs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
