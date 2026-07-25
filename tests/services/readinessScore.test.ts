@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { computeReadinessScore } from "@/lib/services/readinessScore"
+import { computeReadinessScore, smoothReadinessScore } from "@/lib/services/readinessScore"
 
 describe("computeReadinessScore", () => {
   it("scores a perfectly good day near 100", () => {
@@ -45,5 +45,20 @@ describe("computeReadinessScore", () => {
       recoveryEnergy: 5,
     })
     expect(score).toBe(50)
+  })
+})
+
+describe("smoothReadinessScore", () => {
+  it("returns the raw score unchanged when there is no previous entry", () => {
+    expect(smoothReadinessScore(80, null)).toBe(80)
+  })
+
+  it("blends today's score with the previous one to damp volatility", () => {
+    // 65% today (20) + 35% previous (80) = 41
+    expect(smoothReadinessScore(20, 80)).toBe(41)
+  })
+
+  it("stays put when today matches the previous score", () => {
+    expect(smoothReadinessScore(70, 70)).toBe(70)
   })
 })

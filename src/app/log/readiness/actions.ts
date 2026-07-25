@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { computeReadinessScore } from "@/lib/services/readinessScore"
+import { computeReadinessScore, smoothReadinessScore } from "@/lib/services/readinessScore"
 
 function num(formData: FormData, key: string) {
   return Number(formData.get(key) ?? 0)
@@ -30,6 +30,18 @@ export async function logReadiness(formData: FormData) {
     recoveryEnergy: num(formData, "recovery_energy"),
   }
 
+  const { data: previous } = await supabase
+    .from("readiness")
+    .select("total_score")
+    .eq("user_id", user.id)
+    .lt("date", date)
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const rawScore = computeReadinessScore(inputs)
+  const totalScore = smoothReadinessScore(rawScore, previous?.total_score ?? null)
+
   const { error } = await supabase.from("readiness").upsert(
     {
       user_id: user.id,
@@ -43,7 +55,7 @@ export async function logReadiness(formData: FormData) {
       food_beverage: inputs.foodBeverage,
       mood: inputs.mood,
       recovery_energy: inputs.recoveryEnergy,
-      total_score: computeReadinessScore(inputs),
+      total_score: totalScore,
       notes,
     },
     { onConflict: "user_id,date" }
