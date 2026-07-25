@@ -1,7 +1,16 @@
 import { Nav } from "@/components/nav"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/server"
+import { TrendChart, type TrendPoint } from "@/components/charts/TrendChart"
 import { SleepChart, StepsChart, WeightChart } from "./charts"
+
+function toPoints(rows: Array<{ date: string; value: number | null }>): TrendPoint[] {
+  return rows.filter((r) => r.value != null).map((r) => ({ date: r.date, value: r.value! }))
+}
+
+function latestOf(points: TrendPoint[]) {
+  return points.at(-1)?.value ?? null
+}
 
 export default async function HealthPage() {
   const supabase = await createClient()
@@ -14,10 +23,9 @@ export default async function HealthPage() {
     .gte("date", ninetyDaysAgo.toISOString().slice(0, 10))
     .order("date", { ascending: true })
 
-  const { data: stepRows } = await supabase
+  const { data: dailyRows } = await supabase
     .from("daily_metrics")
-    .select("date, steps")
-    .not("steps", "is", null)
+    .select("date, steps, resting_heart_rate, avg_hrv_ms, avg_spo2_percentage, active_zone_minutes")
     .gte("date", ninetyDaysAgo.toISOString().slice(0, 10))
     .order("date", { ascending: true })
 
@@ -32,7 +40,7 @@ export default async function HealthPage() {
     .filter((r) => r.weight_kg != null)
     .map((r) => ({ date: r.date, weight_kg: r.weight_kg! }))
 
-  const stepsPoints = (stepRows ?? [])
+  const stepsPoints = (dailyRows ?? [])
     .filter((r) => r.steps != null)
     .map((r) => ({ date: r.date, steps: r.steps! }))
 
@@ -43,12 +51,23 @@ export default async function HealthPage() {
       hours: Math.round((r.duration_minutes! / 60) * 10) / 10,
     }))
 
+  const restingHrPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.resting_heart_rate })))
+  const hrvPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.avg_hrv_ms })))
+  const spo2Points = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.avg_spo2_percentage })))
+  const azmPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.active_zone_minutes })))
+
   const latestWeight = weightPoints.at(-1)
   const avgSteps = stepsPoints.length
     ? Math.round(stepsPoints.reduce((sum, p) => sum + p.steps, 0) / stepsPoints.length)
     : null
   const avgSleep = sleepPoints.length
     ? Math.round((sleepPoints.reduce((sum, p) => sum + p.hours, 0) / sleepPoints.length) * 10) / 10
+    : null
+  const latestRestingHr = latestOf(restingHrPoints)
+  const latestHrv = latestOf(hrvPoints)
+  const latestSpo2 = latestOf(spo2Points)
+  const avgAzm = azmPoints.length
+    ? Math.round(azmPoints.reduce((sum, p) => sum + p.value, 0) / azmPoints.length)
     : null
 
   return (
@@ -57,9 +76,7 @@ export default async function HealthPage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
         <div>
           <h1 className="text-2xl font-semibold">Body &amp; recovery</h1>
-          <p className="text-muted-foreground">
-            Weight, steps, and sleep synced from Google Health - last 90 days.
-          </p>
+          <p className="text-muted-foreground">Synced from Google Health - last 90 days.</p>
         </div>
 
         <Card>
@@ -97,6 +114,75 @@ export default async function HealthPage() {
               <SleepChart data={sleepPoints} />
             ) : (
               <p className="text-sm text-muted-foreground">No sleep data synced yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{latestRestingHr ? `Resting HR: ${latestRestingHr} bpm` : "Resting heart rate"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {restingHrPoints.length > 0 ? (
+              <TrendChart
+                data={restingHrPoints}
+                kind="line"
+                color="chart-2"
+                formatValue={(v) => `${Math.round(v)} bpm`}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No resting heart rate data synced yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{latestHrv ? `HRV: ${latestHrv} ms` : "Heart rate variability"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {hrvPoints.length > 0 ? (
+              <TrendChart data={hrvPoints} kind="line" color="chart-3" formatValue={(v) => `${v.toFixed(1)} ms`} />
+            ) : (
+              <p className="text-sm text-muted-foreground">No HRV data synced yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{latestSpo2 ? `SpO2: ${latestSpo2}%` : "Blood oxygen (SpO2)"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {spo2Points.length > 0 ? (
+              <TrendChart
+                data={spo2Points}
+                kind="line"
+                color="chart-4"
+                formatValue={(v) => `${v.toFixed(1)}%`}
+                yDomain={[90, 100]}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No SpO2 data synced yet.</p>
+            )}
+            {spo2Points.length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Wrist-based SpO2 readings are often noisy - treat single-day dips as sensor noise rather than a
+                health signal unless they persist.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{avgAzm != null ? `Active zone min: ${avgAzm} avg/day` : "Active zone minutes"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {azmPoints.length > 0 ? (
+              <TrendChart data={azmPoints} kind="bar" color="chart-5" formatValue={(v) => `${Math.round(v)} min`} />
+            ) : (
+              <p className="text-sm text-muted-foreground">No active zone minute data synced yet.</p>
             )}
           </CardContent>
         </Card>
