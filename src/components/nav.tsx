@@ -8,6 +8,7 @@ const links = [
   { href: "/readiness", label: "Readiness" },
   { href: "/handball", label: "Handball" },
   { href: "/health", label: "Body & recovery" },
+  { href: "/sync", label: "Sync" },
   { href: "/settings", label: "Settings" },
 ]
 
