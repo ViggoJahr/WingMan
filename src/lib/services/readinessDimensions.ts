@@ -195,3 +195,15 @@ export function describeValue(dimension: ReadinessDimension, value: number): str
 // Thresholds match the questionnaire's own wording - "requires adjustment
 // in training" starts at the 5-6 bracket for both injury and illness.
 export const WARNING_THRESHOLD = 5
+
+export type Severity = "good" | "warning" | "critical"
+
+// Groups the six brackets into three severity tiers (0-2 / 3-6 / 7-8+9-10),
+// mirrored by direction: for a "bad" field (injury, soreness, ...) low
+// values are good and high values are critical; for a "good" field
+// (sleep, mood, ...) it's the other way around.
+export function severityFor(dimension: ReadinessDimension, value: number): Severity {
+  const tier: Severity = value <= 2 ? "good" : value <= 6 ? "warning" : "critical"
+  if (dimension.direction === "bad") return tier
+  return tier === "good" ? "critical" : tier === "critical" ? "good" : "warning"
+}

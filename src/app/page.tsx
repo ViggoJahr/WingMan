@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { computeSessionLoad } from "@/lib/services/trainingLoad"
+import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
 
 const SESSION_TYPE_LABEL: Record<string, string> = {
   strength_power: "Strength",
@@ -58,7 +59,11 @@ export default async function Home({
       .is("merged_into", null)
       .order("start_time", { ascending: false })
       .limit(15),
-    supabase.from("readiness").select("id, date, total_score").order("date", { ascending: false }).limit(7),
+    supabase
+      .from("readiness")
+      .select("id, date, total_score, current_injury, current_illness")
+      .order("date", { ascending: false })
+      .limit(7),
     supabase
       .from("sessions")
       .select("start_time, end_time, rpe")
@@ -75,6 +80,19 @@ export default async function Home({
   ])
 
   const todaysReadiness = (readinessEntries ?? []).find((r) => r.date === today)
+  const latestReadiness = (readinessEntries ?? [])[0]
+  const injuryDim = READINESS_DIMENSIONS.find((d) => d.field === "current_injury")!
+  const illnessDim = READINESS_DIMENSIONS.find((d) => d.field === "current_illness")!
+  const healthWarnings = latestReadiness
+    ? [
+        latestReadiness.current_injury != null && latestReadiness.current_injury >= WARNING_THRESHOLD
+          ? { label: "Injury", description: describeValue(injuryDim, latestReadiness.current_injury) }
+          : null,
+        latestReadiness.current_illness != null && latestReadiness.current_illness >= WARNING_THRESHOLD
+          ? { label: "Illness", description: describeValue(illnessDim, latestReadiness.current_illness) }
+          : null,
+      ].filter((w): w is { label: string; description: string } => w != null)
+    : []
   const weeklyLoad = Math.round((loadSessions ?? []).reduce((sum, s) => sum + computeSessionLoad(s), 0))
   const stepsWithData = (dailyMetrics ?? []).filter((d) => d.steps != null)
   const avgSteps = stepsWithData.length
@@ -94,6 +112,22 @@ export default async function Home({
             </p>
           )}
         </div>
+
+        {healthWarnings.length > 0 && (
+          <div className="rounded-md border border-[var(--status-critical)]/50 bg-[var(--status-critical)]/10 p-3 text-sm">
+            <p className="font-medium text-[var(--status-critical)]">
+              Consider adjusting training
+              {latestReadiness.date !== today && ` (from ${latestReadiness.date})`}
+            </p>
+            <ul className="mt-1 list-disc pl-5 text-foreground">
+              {healthWarnings.map((w) => (
+                <li key={w.label}>
+                  <span className="font-medium">{w.label}:</span> {w.description}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {!todaysReadiness && (
           <Link

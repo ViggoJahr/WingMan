@@ -8,8 +8,10 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  indicatorClassName,
+  thumbClassName,
   ...props
-}: SliderPrimitive.Root.Props) {
+}: SliderPrimitive.Root.Props & { indicatorClassName?: string; thumbClassName?: string }) {
   const _values = Array.isArray(value)
     ? value
     : Array.isArray(defaultValue)
@@ -34,14 +36,17 @@ function Slider({
         >
           <SliderPrimitive.Indicator
             data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
+            className={cn("bg-primary select-none data-horizontal:h-full data-vertical:w-full", indicatorClassName)}
           />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
-            className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50"
+            className={cn(
+              "relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50",
+              thumbClassName
+            )}
           />
         ))}
       </SliderPrimitive.Control>
