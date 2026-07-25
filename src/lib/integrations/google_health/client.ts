@@ -126,3 +126,57 @@ export const fetchOxygenSaturation = (accessToken: string, since: Date) =>
 
 export const fetchActiveZoneMinutes = (accessToken: string, since: Date) =>
   fetchAndFilterSince(accessToken, "active-zone-minutes", "activeZoneMinutes", since)
+
+export interface HeartRateRollupBucket {
+  startTime: string
+  endTime: string
+  avg: number
+  min: number
+  max: number
+}
+
+// heart-rate rejects list-endpoint time filters entirely (confirmed live),
+// and raw samples are far too high-frequency (~1 every 2-3s) to page
+// through a workout's full history to find one session's window. The
+// rollUp endpoint takes an explicit range in the request body instead of
+// a filter string, sidestepping that - one request per session detail
+// view, not a sync-time concern.
+export async function fetchHeartRateRollup(
+  accessToken: string,
+  startTime: string,
+  endTime: string,
+  windowSizeSeconds: number
+): Promise<HeartRateRollupBucket[]> {
+  const res = await fetch(`${BASE_URL}/users/me/dataTypes/heart-rate/dataPoints:rollUp`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      range: { startTime, endTime },
+      windowSize: `${windowSizeSeconds}s`,
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`Google Health heart-rate rollup failed: ${res.status} ${await res.text()}`)
+  }
+  const body = await res.json()
+  const points = (body.rollupDataPoints ?? []) as Array<{
+    startTime: string
+    endTime: string
+    heartRate?: { beatsPerMinuteAvg?: number; beatsPerMinuteMin?: number; beatsPerMinuteMax?: number }
+  }>
+
+  return points
+    .filter((p) => p.heartRate?.beatsPerMinuteAvg != null)
+    .map((p) => ({
+      startTime: p.startTime,
+      endTime: p.endTime,
+      avg: Math.round(p.heartRate!.beatsPerMinuteAvg! * 10) / 10,
+      min: p.heartRate!.beatsPerMinuteMin ?? p.heartRate!.beatsPerMinuteAvg!,
+      max: p.heartRate!.beatsPerMinuteMax ?? p.heartRate!.beatsPerMinuteAvg!,
+    }))
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+}
