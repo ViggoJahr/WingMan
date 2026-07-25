@@ -5,6 +5,7 @@ export type IntegrationAccountRow = Tables<"integration_accounts">
 
 export interface SyncResult {
   itemsSynced: number
+  warnings?: string[]
 }
 
 export interface SourceAdapter {

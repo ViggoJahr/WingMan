@@ -1,66 +1,71 @@
 import type { Json } from "@/lib/supabase/types"
-import type { GoogleHealthDataPoint } from "./client"
+import { pointTimeMs, type GoogleHealthDataPoint } from "./client"
 
 function toJson(value: unknown): Json {
   return JSON.parse(JSON.stringify(value))
 }
 
-// Field paths below are best-effort from documentation alone (no live
-// payload seen yet) - defensively check a few plausible locations. Once
-// connected, a real sync will reveal the actual shape; only these
-// extraction helpers should need correcting (raw_payload keeps everything
-// regardless), same mitigation already used for the TUGG adapter.
 function pointId(dp: GoogleHealthDataPoint): string {
   return (dp.name as string) ?? JSON.stringify(dp).slice(0, 100)
 }
 
-function intervalStart(dp: GoogleHealthDataPoint): string | undefined {
-  return dp.interval?.startTime ?? (dp.data?.interval as { startTime?: string } | undefined)?.startTime
+function isoFromMs(ms: number): string {
+  return new Date(ms).toISOString()
 }
 
-function intervalEnd(dp: GoogleHealthDataPoint): string | undefined {
-  return dp.interval?.endTime ?? (dp.data?.interval as { endTime?: string } | undefined)?.endTime
-}
-
-function sampleTime(dp: GoogleHealthDataPoint): string | undefined {
-  return dp.sampleTime?.physicalTime
-}
-
+// Confirmed live shape (2026-07-25) - see client.ts. Numeric fields that
+// are int64 in the proto (count, beatsPerMinute, calories' HR fields, etc.)
+// arrive as strings, so every numeric extraction below parses explicitly.
 export function normalizeExercise(dp: GoogleHealthDataPoint, userId: string) {
-  const exercise = (dp.data?.exercise ?? dp.data) as Record<string, unknown> | undefined
-  const start = intervalStart(dp)
-  const end = intervalEnd(dp)
+  const exercise = dp.exercise as {
+    interval?: { startTime?: string; endTime?: string }
+    exerciseType?: string
+    displayName?: string
+    metricsSummary?: {
+      averageHeartRateBeatsPerMinute?: string
+      distanceMeters?: number
+    }
+  }
+
+  const startMs = pointTimeMs(dp, "exercise")
+  const endTime = exercise.interval?.endTime
 
   return {
     session: {
       user_id: userId,
       type: "cardio" as const,
-      start_time: start ?? new Date().toISOString(),
-      end_time: end ?? null,
+      start_time: exercise.interval?.startTime ?? isoFromMs(startMs),
+      end_time: endTime ?? null,
       external_source: "google_health",
       external_id: pointId(dp),
       raw_payload: toJson(dp),
     },
     cardioDetail: {
-      focus: (exercise?.exerciseType as string) ?? null,
-      distance_m: (exercise?.distanceMeters as number) ?? null,
-      avg_hr: (exercise?.averageHeartRate as number) ?? null,
+      focus: exercise.displayName ?? exercise.exerciseType ?? null,
+      distance_m: exercise.metricsSummary?.distanceMeters ?? null,
+      avg_hr: exercise.metricsSummary?.averageHeartRateBeatsPerMinute
+        ? Number(exercise.metricsSummary.averageHeartRateBeatsPerMinute)
+        : null,
     },
   }
 }
 
 export function normalizeSleep(dp: GoogleHealthDataPoint, userId: string) {
-  const start = intervalStart(dp)
-  const end = intervalEnd(dp)
+  const sleep = dp.sleep as {
+    interval?: { startTime?: string; endTime?: string }
+    stages?: unknown
+  }
+  const start = sleep.interval?.startTime
+  const end = sleep.interval?.endTime
   const durationMinutes =
     start && end ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000) : null
 
   return {
     user_id: userId,
-    start_time: start ?? new Date().toISOString(),
+    start_time: start ?? isoFromMs(pointTimeMs(dp, "sleep")),
     end_time: end ?? null,
     duration_minutes: durationMinutes,
-    sleep_stages: toJson(dp.data?.sleepStage ?? dp.data?.sleep ?? null),
+    sleep_stages: toJson(sleep.stages ?? null),
     external_source: "google_health",
     external_id: pointId(dp),
     raw_payload: toJson(dp),
@@ -68,34 +73,49 @@ export function normalizeSleep(dp: GoogleHealthDataPoint, userId: string) {
 }
 
 export function normalizeWeight(dp: GoogleHealthDataPoint, userId: string) {
-  const weight = (dp.data?.weight ?? dp.data) as Record<string, unknown> | undefined
-  const time = sampleTime(dp) ?? intervalStart(dp)
+  const weight = dp.weight as {
+    sampleTime?: { physicalTime?: string; civilTime?: { date?: { year: number; month: number; day: number } } }
+    weightGrams?: number
+  }
+
+  const civilDate = weight.sampleTime?.civilTime?.date
+  const date = civilDate
+    ? `${civilDate.year}-${String(civilDate.month).padStart(2, "0")}-${String(civilDate.day).padStart(2, "0")}`
+    : (weight.sampleTime?.physicalTime ?? isoFromMs(pointTimeMs(dp, "weight"))).slice(0, 10)
 
   return {
     user_id: userId,
-    date: (time ?? new Date().toISOString()).slice(0, 10),
-    weight_kg: (weight?.value as number) ?? null,
+    date,
+    weight_kg: weight.weightGrams != null ? weight.weightGrams / 1000 : null,
     external_source: "google_health",
     external_id: pointId(dp),
   }
 }
 
-export interface DayBucket {
-  steps: number
-  restingHeartRate: number | null
-  raw: GoogleHealthDataPoint[]
-}
-
-export function bucketByDay(points: GoogleHealthDataPoint[], valueKey: string): Map<string, number> {
+// Buckets steps (count) or resting heart rate (beatsPerMinute) data points
+// by local calendar day - both are int64-as-string fields in the API.
+export function bucketByDay(points: GoogleHealthDataPoint[], typeKey: string, valueField: string) {
   const byDay = new Map<string, number>()
   for (const dp of points) {
-    const time = intervalStart(dp) ?? sampleTime(dp)
-    if (!time) continue
-    const day = time.slice(0, 10)
-    const data = dp.data as Record<string, unknown> | undefined
-    const value = (data?.[valueKey] as { count?: number; value?: number } | number | undefined) ?? 0
-    const numericValue = typeof value === "number" ? value : (value.count ?? value.value ?? 0)
-    byDay.set(day, (byDay.get(day) ?? 0) + numericValue)
+    const payload = dp[typeKey] as Record<string, unknown> | undefined
+    if (!payload) continue
+
+    const civilDate = (
+      (payload.interval as { civilStartTime?: { date?: { year: number; month: number; day: number } } })
+        ?.civilStartTime?.date ?? (payload.date as { year: number; month: number; day: number } | undefined)
+    )
+    const day = civilDate
+      ? `${civilDate.year}-${String(civilDate.month).padStart(2, "0")}-${String(civilDate.day).padStart(2, "0")}`
+      : isoFromMs(pointTimeMs(dp, typeKey)).slice(0, 10)
+
+    const raw = payload[valueField]
+    const value = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : 0
+    if (valueField === "count") {
+      byDay.set(day, (byDay.get(day) ?? 0) + value)
+    } else {
+      // Non-cumulative fields (e.g. resting heart rate): last value wins.
+      byDay.set(day, value)
+    }
   }
   return byDay
 }

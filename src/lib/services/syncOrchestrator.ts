@@ -21,16 +21,21 @@ export async function runSync(accountId?: string) {
       .single()
 
     try {
-      const { itemsSynced } = await adapter.sync(account, db)
+      const { itemsSynced, warnings } = await adapter.sync(account, db)
       await db
         .from("sync_runs")
-        .update({ status: "success", items_synced: itemsSynced, finished_at: new Date().toISOString() })
+        .update({
+          status: warnings?.length ? "partial" : "success",
+          items_synced: itemsSynced,
+          error_message: warnings?.length ? warnings.join("\n") : null,
+          finished_at: new Date().toISOString(),
+        })
         .eq("id", syncRun!.id)
       await db
         .from("integration_accounts")
         .update({ last_synced_at: new Date().toISOString(), status: "active" })
         .eq("id", account.id)
-      results.push({ accountId: account.id, source: account.source, itemsSynced })
+      results.push({ accountId: account.id, source: account.source, itemsSynced, warnings })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       await db

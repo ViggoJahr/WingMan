@@ -28,14 +28,36 @@ async function sync(
   const userId = account.user_id
   const since = new Date(Date.now() - SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000)
   let itemsSynced = 0
+  const warnings: string[] = []
 
-  const [exercisePoints, sleepPoints, weightPoints, stepsPoints, restingHrPoints] = await Promise.all([
-    fetchExercise(tokens.accessToken, since),
-    fetchSleep(tokens.accessToken, since),
-    fetchWeight(tokens.accessToken, since),
-    fetchSteps(tokens.accessToken, since),
-    fetchRestingHeartRate(tokens.accessToken, since),
-  ])
+  // Fetch each data type independently - one type erroring (e.g. a scope
+  // that wasn't granted, or a data type with no history) shouldn't discard
+  // everything else that succeeded.
+  const dataTypes = [
+    { label: "exercise", fetch: () => fetchExercise(tokens.accessToken, since) },
+    { label: "sleep", fetch: () => fetchSleep(tokens.accessToken, since) },
+    { label: "weight", fetch: () => fetchWeight(tokens.accessToken, since) },
+    { label: "steps", fetch: () => fetchSteps(tokens.accessToken, since) },
+    { label: "restingHeartRate", fetch: () => fetchRestingHeartRate(tokens.accessToken, since) },
+  ] as const
+
+  const settled = await Promise.allSettled(dataTypes.map((d) => d.fetch()))
+  const results: Record<string, Awaited<ReturnType<(typeof dataTypes)[number]["fetch"]>>> = {}
+  settled.forEach((result, i) => {
+    const label = dataTypes[i].label
+    if (result.status === "fulfilled") {
+      results[label] = result.value
+    } else {
+      results[label] = []
+      warnings.push(`${label}: ${result.reason?.message ?? result.reason}`)
+    }
+  })
+
+  const exercisePoints = results.exercise
+  const sleepPoints = results.sleep
+  const weightPoints = results.weight
+  const stepsPoints = results.steps
+  const restingHrPoints = results.restingHeartRate
 
   for (const dp of exercisePoints) {
     const { session, cardioDetail } = normalizeExercise(dp, userId)
@@ -67,8 +89,8 @@ async function sync(
     itemsSynced++
   }
 
-  const stepsByDay = bucketByDay(stepsPoints, "steps")
-  const restingHrByDay = bucketByDay(restingHrPoints, "dailyRestingHeartRate")
+  const stepsByDay = bucketByDay(stepsPoints, "steps", "count")
+  const restingHrByDay = bucketByDay(restingHrPoints, "dailyRestingHeartRate", "beatsPerMinute")
   const days = new Set([...stepsByDay.keys(), ...restingHrByDay.keys()])
   for (const day of days) {
     const { error } = await db.from("daily_metrics").upsert(
@@ -86,7 +108,7 @@ async function sync(
     itemsSynced++
   }
 
-  return { itemsSynced }
+  return { itemsSynced, warnings: warnings.length > 0 ? warnings : undefined }
 }
 
 export const googleHealthAdapter: SourceAdapter = {
