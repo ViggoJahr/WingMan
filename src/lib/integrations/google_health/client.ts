@@ -2,36 +2,13 @@ const BASE_URL = "https://health.googleapis.com/v4"
 
 // Confirmed live (2026-07-25): each data point nests its payload under a
 // top-level key named after the data type - dp.weight, dp.steps,
-// dp.exercise, dp.sleep, dp.dailyRestingHeartRate - not under a "data"
-// union field as the docs implied. Int64 fields (count, beatsPerMinute,
-// etc.) serialize as strings, not JSON numbers.
+// dp.exercise, dp.sleep, dp.dailyRestingHeartRate, etc. - not under a
+// "data" union field as the docs implied. Int64 fields (count,
+// beatsPerMinute, etc.) serialize as strings, not JSON numbers.
 export interface GoogleHealthDataPoint {
   name?: string
   dataSource?: { platform?: string; recordingMethod?: string }
   [typeKey: string]: unknown
-}
-
-async function fetchDataPoints(
-  accessToken: string,
-  dataType: string,
-  filter?: string
-): Promise<GoogleHealthDataPoint[]> {
-  const url = new URL(`${BASE_URL}/users/me/dataTypes/${dataType}/dataPoints`)
-  url.searchParams.set("pageSize", "1000")
-  if (filter) url.searchParams.set("filter", filter)
-
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-  })
-  if (!res.ok) {
-    throw new Error(`Google Health fetch ${dataType} failed: ${res.status} ${await res.text()}`)
-  }
-  const body = await res.json()
-  return (body.dataPoints ?? body.dataPoint ?? []) as GoogleHealthDataPoint[]
-}
-
-function sinceFilter(dataType: string, since: Date, timeField: "interval.start_time" | "sample_time.physical_time") {
-  return `${dataType}.${timeField} >= "${since.toISOString()}"`
 }
 
 interface CivilDate {
@@ -44,8 +21,6 @@ function civilDateToIso(date: CivilDate): string {
   return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`
 }
 
-// dailyRestingHeartRate only carries a plain civil date (no time-of-day),
-// so this returns midnight UTC for that date - good enough for day-bucketing.
 export function pointTimeMs(dp: GoogleHealthDataPoint, typeKey: string): number {
   const payload = dp[typeKey] as Record<string, unknown> | undefined
   if (!payload) return 0
@@ -62,27 +37,68 @@ export function pointTimeMs(dp: GoogleHealthDataPoint, typeKey: string): number 
   return 0
 }
 
-// exercise and sleep reject any filter on their interval field (400
-// INVALID_DATA_POINT_FILTER regardless of naming); daily-resting-heart-rate
-// rejects filtering on its date field the same way. Fetch everything and
-// filter client-side for those, rather than keep guessing filter syntax -
-// steps and weight are the only two confirmed to accept server-side filters.
-async function fetchAndFilterSince(
+// Fetches every page (following nextPageToken) so high-frequency types
+// (SpO2 ~1/min, HRV ~1/5min, active-zone-minutes per-minute) aren't
+// silently truncated at the first 1000-point page. Points are returned
+// newest-first (confirmed live), so pagination stops as soon as a page's
+// oldest point falls before `since` - avoids walking the account's full
+// history every sync once there's more than one page of data.
+async function fetchDataPoints(
   accessToken: string,
   dataType: string,
-  typeKey: string,
-  since: Date
-) {
-  const points = await fetchDataPoints(accessToken, dataType)
+  opts: { filter?: string; since?: Date } = {}
+): Promise<GoogleHealthDataPoint[]> {
+  const points: GoogleHealthDataPoint[] = []
+  let pageToken: string | undefined
+
+  do {
+    const url = new URL(`${BASE_URL}/users/me/dataTypes/${dataType}/dataPoints`)
+    url.searchParams.set("pageSize", "1000")
+    if (opts.filter) url.searchParams.set("filter", opts.filter)
+    if (pageToken) url.searchParams.set("pageToken", pageToken)
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    })
+    if (!res.ok) {
+      throw new Error(`Google Health fetch ${dataType} failed: ${res.status} ${await res.text()}`)
+    }
+    const body = await res.json()
+    const page = (body.dataPoints ?? body.dataPoint ?? []) as GoogleHealthDataPoint[]
+    points.push(...page)
+
+    pageToken = body.nextPageToken
+    if (opts.since && page.length > 0) {
+      const oldestOnPage = Math.min(...page.map((dp) => pointTimeMs(dp, dataType) || Infinity))
+      if (oldestOnPage < opts.since.getTime()) break
+    }
+  } while (pageToken)
+
+  return points
+}
+
+function sinceFilter(dataType: string, since: Date, timeField: "interval.start_time" | "sample_time.physical_time") {
+  return `${dataType}.${timeField} >= "${since.toISOString()}"`
+}
+
+// exercise, sleep, and daily-resting-heart-rate reject any filter on their
+// interval/sample-time field (400 INVALID_DATA_POINT_FILTER regardless of
+// naming) - confirmed live. Fetch everything (paginated) and filter
+// client-side for those, rather than keep guessing filter syntax.
+async function fetchAndFilterSince(accessToken: string, dataType: string, typeKey: string, since: Date) {
+  const points = await fetchDataPoints(accessToken, dataType, { since })
   const sinceMs = since.getTime()
   return points.filter((dp) => pointTimeMs(dp, typeKey) >= sinceMs)
 }
 
 export const fetchSteps = (accessToken: string, since: Date) =>
-  fetchDataPoints(accessToken, "steps", sinceFilter("steps", since, "interval.start_time"))
+  fetchDataPoints(accessToken, "steps", { filter: sinceFilter("steps", since, "interval.start_time"), since })
 
 export const fetchWeight = (accessToken: string, since: Date) =>
-  fetchDataPoints(accessToken, "weight", sinceFilter("weight", since, "sample_time.physical_time"))
+  fetchDataPoints(accessToken, "weight", {
+    filter: sinceFilter("weight", since, "sample_time.physical_time"),
+    since,
+  })
 
 export const fetchExercise = (accessToken: string, since: Date) =>
   fetchAndFilterSince(accessToken, "exercise", "exercise", since)
@@ -92,3 +108,21 @@ export const fetchSleep = (accessToken: string, since: Date) =>
 
 export const fetchRestingHeartRate = (accessToken: string, since: Date) =>
   fetchAndFilterSince(accessToken, "daily-resting-heart-rate", "dailyRestingHeartRate", since)
+
+// Newly added (2026-07-25): body fat and height are sample-based like
+// weight; HRV, SpO2, and active-zone-minutes are high-frequency and
+// bucketed to daily averages/sums downstream in normalize.ts.
+export const fetchBodyFat = (accessToken: string, since: Date) =>
+  fetchAndFilterSince(accessToken, "body-fat", "bodyFat", since)
+
+export const fetchHeight = (accessToken: string, since: Date) =>
+  fetchAndFilterSince(accessToken, "height", "height", since)
+
+export const fetchHeartRateVariability = (accessToken: string, since: Date) =>
+  fetchAndFilterSince(accessToken, "heart-rate-variability", "heartRateVariability", since)
+
+export const fetchOxygenSaturation = (accessToken: string, since: Date) =>
+  fetchAndFilterSince(accessToken, "oxygen-saturation", "oxygenSaturation", since)
+
+export const fetchActiveZoneMinutes = (accessToken: string, since: Date) =>
+  fetchAndFilterSince(accessToken, "active-zone-minutes", "activeZoneMinutes", since)

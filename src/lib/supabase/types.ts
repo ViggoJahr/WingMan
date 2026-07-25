@@ -42,6 +42,7 @@ export type Database = {
       }
       body_metrics: {
         Row: {
+          body_fat_percentage: number | null
           date: string
           external_id: string | null
           external_source: string | null
@@ -51,6 +52,7 @@ export type Database = {
           weight_kg: number | null
         }
         Insert: {
+          body_fat_percentage?: number | null
           date: string
           external_id?: string | null
           external_source?: string | null
@@ -60,6 +62,7 @@ export type Database = {
           weight_kg?: number | null
         }
         Update: {
+          body_fat_percentage?: number | null
           date?: string
           external_id?: string | null
           external_source?: string | null
@@ -109,6 +112,9 @@ export type Database = {
       }
       daily_metrics: {
         Row: {
+          active_zone_minutes: number | null
+          avg_hrv_ms: number | null
+          avg_spo2_percentage: number | null
           created_at: string
           date: string
           external_id: string | null
@@ -120,6 +126,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          active_zone_minutes?: number | null
+          avg_hrv_ms?: number | null
+          avg_spo2_percentage?: number | null
           created_at?: string
           date: string
           external_id?: string | null
@@ -131,6 +140,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          active_zone_minutes?: number | null
+          avg_hrv_ms?: number | null
+          avg_spo2_percentage?: number | null
           created_at?: string
           date?: string
           external_id?: string | null
@@ -601,11 +613,16 @@ export type Database = {
       }
       sessions: {
         Row: {
+          active_duration_seconds: number | null
+          active_zone_minutes: number | null
+          calories_kcal: number | null
           end_time: string | null
           external_id: string | null
           external_source: string | null
+          hr_zones: Json | null
           id: string
           location: string | null
+          merged_into: string | null
           raw_payload: Json | null
           rpe: number | null
           start_time: string
@@ -614,11 +631,16 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          active_duration_seconds?: number | null
+          active_zone_minutes?: number | null
+          calories_kcal?: number | null
           end_time?: string | null
           external_id?: string | null
           external_source?: string | null
+          hr_zones?: Json | null
           id?: string
           location?: string | null
+          merged_into?: string | null
           raw_payload?: Json | null
           rpe?: number | null
           start_time: string
@@ -627,11 +649,16 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          active_duration_seconds?: number | null
+          active_zone_minutes?: number | null
+          calories_kcal?: number | null
           end_time?: string | null
           external_id?: string | null
           external_source?: string | null
+          hr_zones?: Json | null
           id?: string
           location?: string | null
+          merged_into?: string | null
           raw_payload?: Json | null
           rpe?: number | null
           start_time?: string
@@ -640,6 +667,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sessions_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sessions_user_id_fkey"
             columns: ["user_id"]

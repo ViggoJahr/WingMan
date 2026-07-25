@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { adapterRegistry } from "@/lib/integrations/registry"
+import { mergeOverlappingSessions } from "./sessionMerge"
 
 export async function runSync(accountId?: string) {
   const db = createServiceRoleClient()
@@ -10,6 +11,8 @@ export async function runSync(accountId?: string) {
   if (error) throw new Error(`Failed to load integration accounts: ${error.message}`)
 
   const results = []
+  const touchedUserIds = new Set<string>()
+
   for (const account of accounts ?? []) {
     const adapter = adapterRegistry[account.source]
     if (!adapter) continue
@@ -36,6 +39,7 @@ export async function runSync(accountId?: string) {
         .update({ last_synced_at: new Date().toISOString(), status: "active" })
         .eq("id", account.id)
       results.push({ accountId: account.id, source: account.source, itemsSynced, warnings })
+      touchedUserIds.add(account.user_id)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       await db
@@ -44,6 +48,19 @@ export async function runSync(accountId?: string) {
         .eq("id", syncRun!.id)
       await db.from("integration_accounts").update({ status: "error" }).eq("id", account.id)
       results.push({ accountId: account.id, source: account.source, error: message })
+    }
+  }
+
+  // Runs once per user after all their sources have synced, so a session
+  // that just landed from one source can be matched against another
+  // source's session from the same run.
+  for (const userId of touchedUserIds) {
+    try {
+      const { merged } = await mergeOverlappingSessions(userId, db)
+      if (merged > 0) results.push({ userId, merged })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      results.push({ userId, mergeError: message })
     }
   }
 

@@ -13,6 +13,7 @@ export default async function TrainingLoadPage() {
   const { data: sessions } = await supabase
     .from("sessions")
     .select("start_time, end_time, rpe")
+    .is("merged_into", null)
     .gte("start_time", ninetyDaysAgo.toISOString())
     .order("start_time", { ascending: true })
 

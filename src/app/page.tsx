@@ -34,6 +34,7 @@ export default async function Home({
   const { data: sessions } = await supabase
     .from("sessions")
     .select("id, type, start_time, rpe, location, external_source")
+    .is("merged_into", null)
     .order("start_time", { ascending: false })
     .limit(20)
 
