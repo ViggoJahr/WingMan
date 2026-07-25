@@ -7,6 +7,7 @@ const links = [
   { href: "/training-load", label: "Training load" },
   { href: "/readiness", label: "Readiness" },
   { href: "/handball", label: "Handball" },
+  { href: "/health", label: "Body & recovery" },
   { href: "/settings", label: "Settings" },
 ]
 
