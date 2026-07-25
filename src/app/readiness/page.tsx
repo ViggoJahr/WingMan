@@ -20,6 +20,7 @@ export default async function ReadinessTrendPage() {
 
   const points = (entries ?? []).map((e) => ({ date: e.date, total_score: e.total_score ?? 0 }))
   const latest = points.at(-1)
+  const recentCheckins = [...points].reverse().slice(0, 14)
 
   return (
     <div className="flex flex-col">
@@ -54,6 +55,29 @@ export default async function ReadinessTrendPage() {
             )}
           </CardContent>
         </Card>
+
+        {recentCheckins.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent check-ins</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col divide-y text-sm">
+                {recentCheckins.map((c) => (
+                  <li key={c.date} className="flex items-center justify-between py-2">
+                    <span>{c.date}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">{c.total_score}/100</span>
+                      <Link href={`/log/readiness?date=${c.date}`} className="text-muted-foreground underline">
+                        Edit
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

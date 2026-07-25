@@ -9,24 +9,34 @@ function todayLocalDate() {
   return now.toISOString().slice(0, 10)
 }
 
-export default async function LogReadinessPage() {
+export default async function LogReadinessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>
+}) {
+  const { date: dateParam } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const today = todayLocalDate()
+  const date = dateParam ?? todayLocalDate()
   let previousScore: number | null = null
+  let existingValues = null
   if (user) {
-    const { data: previous } = await supabase
-      .from("readiness")
-      .select("total_score")
-      .eq("user_id", user.id)
-      .lt("date", today)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const [{ data: previous }, { data: existing }] = await Promise.all([
+      supabase
+        .from("readiness")
+        .select("total_score")
+        .eq("user_id", user.id)
+        .lt("date", date)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("readiness").select("*").eq("user_id", user.id).eq("date", date).maybeSingle(),
+    ])
     previousScore = previous?.total_score ?? null
+    existingValues = existing
   }
 
   return (
@@ -35,10 +45,10 @@ export default async function LogReadinessPage() {
       <div className="flex justify-center p-4">
         <Card className="w-full max-w-lg">
           <CardHeader>
-            <CardTitle>Daily readiness check-in</CardTitle>
+            <CardTitle>{existingValues ? "Edit readiness check-in" : "Daily readiness check-in"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <ReadinessForm date={today} previousScore={previousScore} />
+            <ReadinessForm date={date} previousScore={previousScore} existingValues={existingValues} />
           </CardContent>
         </Card>
       </div>

@@ -64,3 +64,16 @@ export async function logReadiness(formData: FormData) {
 
   redirect("/?logged=readiness")
 }
+
+export async function deleteReadiness(date: string) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect("/login")
+
+  const { error } = await supabase.from("readiness").delete().eq("user_id", user.id).eq("date", date)
+  if (error) throw new Error(error.message)
+
+  redirect("/readiness")
+}

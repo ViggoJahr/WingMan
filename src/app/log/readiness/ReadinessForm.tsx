@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
@@ -14,7 +15,7 @@ import {
   type ReadinessField,
   type Severity,
 } from "@/lib/services/readinessDimensions"
-import { logReadiness } from "./actions"
+import { deleteReadiness, logReadiness } from "./actions"
 
 const DEFAULTS: Record<ReadinessField, number> = {
   training_load: 0,
@@ -46,8 +47,44 @@ const SEVERITY_BORDER: Record<Severity, string> = {
   critical: "border-[var(--status-critical)]",
 }
 
-export function ReadinessForm({ date, previousScore }: { date: string; previousScore: number | null }) {
-  const [values, setValues] = useState<Record<ReadinessField, number>>(DEFAULTS)
+export interface ExistingReadiness {
+  training_load: number | null
+  muscle_soreness: number | null
+  mental_stress: number | null
+  current_injury: number | null
+  current_illness: number | null
+  sleep_quality: number | null
+  food_beverage: number | null
+  mood: number | null
+  recovery_energy: number | null
+  notes: string | null
+}
+
+export function ReadinessForm({
+  date,
+  previousScore,
+  existingValues,
+}: {
+  date: string
+  previousScore: number | null
+  existingValues?: ExistingReadiness | null
+}) {
+  const [values, setValues] = useState<Record<ReadinessField, number>>({
+    ...DEFAULTS,
+    ...(existingValues
+      ? {
+          training_load: existingValues.training_load ?? DEFAULTS.training_load,
+          muscle_soreness: existingValues.muscle_soreness ?? DEFAULTS.muscle_soreness,
+          mental_stress: existingValues.mental_stress ?? DEFAULTS.mental_stress,
+          current_injury: existingValues.current_injury ?? DEFAULTS.current_injury,
+          current_illness: existingValues.current_illness ?? DEFAULTS.current_illness,
+          sleep_quality: existingValues.sleep_quality ?? DEFAULTS.sleep_quality,
+          food_beverage: existingValues.food_beverage ?? DEFAULTS.food_beverage,
+          mood: existingValues.mood ?? DEFAULTS.mood,
+          recovery_energy: existingValues.recovery_energy ?? DEFAULTS.recovery_energy,
+        }
+      : {}),
+  })
 
   return (
     <form action={logReadiness} className="flex flex-col gap-4">
@@ -92,12 +129,20 @@ export function ReadinessForm({ date, previousScore }: { date: string; previousS
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" rows={2} />
+        <Textarea id="notes" name="notes" rows={2} defaultValue={existingValues?.notes ?? ""} />
       </div>
 
-      <Button type="submit" className="mt-1">
-        Save check-in
-      </Button>
+      <div className="mt-1 flex gap-2">
+        <Button type="submit" className="flex-1">
+          {existingValues ? "Save changes" : "Save check-in"}
+        </Button>
+        {existingValues && (
+          <ConfirmDeleteButton
+            action={deleteReadiness.bind(null, date)}
+            confirmText="Delete this readiness check-in? This cannot be undone."
+          />
+        )}
+      </div>
     </form>
   )
 }

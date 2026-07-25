@@ -1,8 +1,13 @@
+import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { Nav } from "@/components/nav"
+import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
+import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { HeartRateChart } from "./HeartRateChart"
+import { deleteSession } from "./actions"
 
 const SESSION_TYPE_LABEL: Record<string, string> = {
   strength_power: "Strength",
@@ -106,10 +111,27 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       <Nav />
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
         <div>
-          <h1 className="text-2xl font-semibold">
-            {SESSION_TYPE_LABEL[session.type] ?? session.type}
-            {(cardio?.focus || strength?.focus) && ` - ${cardio?.focus ?? strength?.focus}`}
-          </h1>
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="text-2xl font-semibold">
+              {SESSION_TYPE_LABEL[session.type] ?? session.type}
+              {(cardio?.focus || strength?.focus) && ` - ${cardio?.focus ?? strength?.focus}`}
+            </h1>
+            {session.external_source === null ? (
+              <div className="flex shrink-0 gap-2">
+                <Link href={`/sessions/${id}/edit`} className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+                  Edit
+                </Link>
+                <ConfirmDeleteButton
+                  action={deleteSession.bind(null, id)}
+                  confirmText="Delete this session? This cannot be undone."
+                />
+              </div>
+            ) : (
+              <p className="shrink-0 text-xs text-muted-foreground">
+                Synced from {SOURCE_LABEL[session.external_source] ?? session.external_source} - edit disabled
+              </p>
+            )}
+          </div>
           <p className="text-muted-foreground">{formatDateTime(session.start_time)}</p>
           {sourcesInvolved.length > 0 && (
             <p className="text-xs text-muted-foreground">

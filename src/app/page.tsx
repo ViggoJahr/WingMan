@@ -6,23 +6,7 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { computeSessionLoad } from "@/lib/services/trainingLoad"
 import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
-
-const SESSION_TYPE_LABEL: Record<string, string> = {
-  strength_power: "Strength",
-  cardio: "Cardio",
-  mobility_rehab: "Mobility/Rehab",
-  active_rest: "Active rest",
-  handball: "Handball",
-}
-
-const SOURCE_LABEL: Record<string, string> = {
-  tugg: "TUGG",
-  google_health: "Google Health",
-}
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-}
+import { SessionList, type SessionRowData } from "@/components/SessionRow"
 
 function todayIso() {
   const now = new Date()
@@ -185,40 +169,13 @@ export default async function Home({
             <CardTitle>Recent workouts</CardTitle>
           </CardHeader>
           <CardContent>
-            {sessions && sessions.length > 0 ? (
-              <ul className="flex flex-col divide-y">
-                {sessions.map((s) => {
-                  const cardio = s.cardio_sessions as unknown as { focus: string | null; avg_hr: number | null } | null
-                  const strength = s.strength_sessions as unknown as { focus: string | null } | null
-                  const focus = cardio?.focus ?? strength?.focus
-                  return (
-                    <Link
-                      key={s.id}
-                      href={`/sessions/${s.id}`}
-                      className="flex items-center justify-between py-2 text-sm hover:bg-accent"
-                    >
-                      <div>
-                        <p className="font-medium">
-                          {focus ?? SESSION_TYPE_LABEL[s.type] ?? s.type}
-                          {s.external_source && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              via {SOURCE_LABEL[s.external_source] ?? s.external_source}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-muted-foreground">{formatDateTime(s.start_time)}</p>
-                      </div>
-                      <div className="text-right text-muted-foreground">
-                        {s.calories_kcal != null && <p>{s.calories_kcal} kcal</p>}
-                        {s.rpe != null && <p>RPE {s.rpe}</p>}
-                      </div>
-                    </Link>
-                  )
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No sessions logged yet.</p>
-            )}
+            <SessionList
+              sessions={(sessions ?? []).map((s) => ({
+                ...s,
+                cardio_sessions: s.cardio_sessions as unknown as SessionRowData["cardio_sessions"],
+                strength_sessions: s.strength_sessions as unknown as SessionRowData["strength_sessions"],
+              }))}
+            />
           </CardContent>
         </Card>
       </div>

@@ -57,3 +57,57 @@ export async function logWorkout(formData: FormData) {
 
   redirect("/?logged=workout")
 }
+
+export async function updateWorkout(sessionId: string, formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect("/login")
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from("sessions")
+    .select("external_source, type")
+    .eq("id", sessionId)
+    .single()
+  if (fetchErr) throw new Error(fetchErr.message)
+  if (existing.external_source !== null) {
+    throw new Error("Synced sessions can't be edited - they'd just be overwritten by the next sync.")
+  }
+
+  const type = existing.type as "cardio" | "strength_power" | "mobility_rehab" | "active_rest"
+  const startTime = formData.get("start_time") as string
+  const durationMinutes = Number(formData.get("duration_minutes"))
+  const endTime = new Date(new Date(startTime).getTime() + durationMinutes * 60_000)
+  const focus = (formData.get("focus") as string) || null
+  const rpe = formData.get("rpe") ? Number(formData.get("rpe")) : null
+  const location = (formData.get("location") as string) || null
+  const distanceKm = formData.get("distance_km") ? Number(formData.get("distance_km")) : null
+
+  const { error: sessionErr } = await supabase
+    .from("sessions")
+    .update({
+      start_time: new Date(startTime).toISOString(),
+      end_time: endTime.toISOString(),
+      rpe,
+      location,
+    })
+    .eq("id", sessionId)
+  if (sessionErr) throw new Error(sessionErr.message)
+
+  if (type === "cardio") {
+    const { error } = await supabase
+      .from("cardio_sessions")
+      .update({ focus, distance_m: distanceKm ? Math.round(distanceKm * 1000) : null })
+      .eq("session_id", sessionId)
+    if (error) throw new Error(error.message)
+  } else if (type === "strength_power") {
+    const { error } = await supabase.from("strength_sessions").update({ focus }).eq("session_id", sessionId)
+    if (error) throw new Error(error.message)
+  } else if (type === "active_rest") {
+    const { error } = await supabase.from("active_rest").update({ focus }).eq("session_id", sessionId)
+    if (error) throw new Error(error.message)
+  }
+
+  redirect(`/sessions/${sessionId}`)
+}
