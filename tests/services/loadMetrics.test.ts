@@ -3,6 +3,7 @@ import {
   acwrBand,
   computeLoadMetrics,
   densify,
+  intensityCoverage,
   type DailyLoadPoint,
 } from "@/lib/services/loadMetrics"
 
@@ -73,6 +74,38 @@ describe("computeLoadMetrics", () => {
 
   it("returns an empty array for empty input", () => {
     expect(computeLoadMetrics([])).toEqual([])
+  })
+})
+
+describe("intensityCoverage", () => {
+  it("reports the share of sessions backed by real intensity data", () => {
+    const summary = intensityCoverage([
+      { day: "2026-01-01", load: 10, sessionCount: 2, sessionsWithIntensity: 1 },
+      { day: "2026-01-02", load: 0, sessionCount: 0, sessionsWithIntensity: 0 },
+      { day: "2026-01-03", load: 20, sessionCount: 2, sessionsWithIntensity: 2 },
+    ])
+
+    expect(summary.sessionCount).toBe(4)
+    expect(summary.sessionsWithIntensity).toBe(3)
+    expect(summary.coverage).toBe(0.75)
+    expect(summary.sufficient).toBe(true)
+  })
+
+  it("is insufficient when most sessions lack RPE or heart-rate zones", () => {
+    // The real situation as of 2026-07: 19 of 74 sessions had usable intensity.
+    const summary = intensityCoverage([
+      { day: "2026-01-01", load: 100, sessionCount: 74, sessionsWithIntensity: 19 },
+    ])
+
+    expect(summary.coverage).toBeCloseTo(0.2568, 4)
+    expect(summary.sufficient).toBe(false)
+  })
+
+  it("reports null coverage rather than 0 when there are no sessions at all", () => {
+    const summary = intensityCoverage([{ day: "2026-01-01", load: 0 }])
+
+    expect(summary.coverage).toBeNull()
+    expect(summary.sufficient).toBe(false)
   })
 })
 

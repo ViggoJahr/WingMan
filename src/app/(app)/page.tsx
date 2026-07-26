@@ -6,15 +6,22 @@ import { createClient } from "@/lib/supabase/server"
 import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
 import { fetchDailyFacts, type DailyFactRow } from "@/lib/services/dailyFacts"
 import { todayIso } from "@/lib/dates"
-import { ACWR_BAND_LABEL, acwrBand, computeLoadMetrics } from "@/lib/services/loadMetrics"
+import {
+  ACWR_BAND_LABEL,
+  acwrBand,
+  computeLoadMetrics,
+  intensityCoverage,
+} from "@/lib/services/loadMetrics"
 import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap"
 import { StatTile, type TileStatus } from "@/components/StatTile"
-import { SessionList, type SessionRowData } from "@/components/SessionRow"
+import { SessionList, SESSION_TYPE_LABEL, type SessionRowData } from "@/components/SessionRow"
+import { RpeQuickSet } from "@/components/RpeQuickSet"
 
 // The heatmap shows 26 weeks; ACWR needs 28 days of history before that to be
 // meaningful, so pull a little over 200 days in one query.
 const HISTORY_DAYS = 210
 const HEATMAP_WEEKS = 26
+const CHRONIC_WINDOW_DAYS = 28
 
 function num(value: number | null | undefined): number | null {
   if (value == null) return null
@@ -69,7 +76,7 @@ export default async function Home({
     supabase
       .from("sessions")
       .select(
-        "id, type, start_time, rpe, calories_kcal, external_source, cardio_sessions(focus, avg_hr), strength_sessions(focus)"
+        "id, type, start_time, rpe, manual_rpe, calories_kcal, external_source, cardio_sessions(focus, avg_hr), strength_sessions(focus)"
       )
       .is("merged_into", null)
       .order("start_time", { ascending: false })
@@ -79,9 +86,23 @@ export default async function Home({
   const last7 = facts.slice(-7)
   const prev7 = facts.slice(-14, -7)
 
-  // Rolling load metrics over the whole window; only the latest day is shown.
-  const loadMetrics = computeLoadMetrics(facts.map((f) => ({ day: f.day, load: num(f.total_load) ?? 0 })))
+  // Load is driven by load_estimate, not the strictly-measured total_load: only
+  // ~26% of sessions carry an RPE, so total_load alone reports most training
+  // days as rest days. The estimate falls back to heart-rate zones, then to a
+  // conservative assumed RPE.
+  const loadSeries = facts.map((f) => ({
+    day: f.day,
+    load: num(f.load_estimate) ?? 0,
+    sessionCount: num(f.session_count) ?? 0,
+    sessionsWithIntensity: num(f.sessions_with_intensity) ?? 0,
+  }))
+  const loadMetrics = computeLoadMetrics(loadSeries)
   const latestMetrics = loadMetrics[loadMetrics.length - 1]
+
+  // ACWR over a series that is mostly assumed values describes the assumptions,
+  // not the training, so it is withheld rather than shown as a confident band.
+  const coverage = intensityCoverage(loadSeries.slice(-CHRONIC_WINDOW_DAYS))
+  const showAcwr = coverage.sufficient && latestMetrics?.acwr != null
 
   const todaysFact = facts.find((f) => f.day === today)
   const latestReadinessFact = [...facts].reverse().find((f) => f.readiness_score != null)
@@ -99,8 +120,8 @@ export default async function Home({
       ].filter((w): w is { label: string; description: string } => w != null)
     : []
 
-  const weeklyLoad = sumOf(last7, "total_load")
-  const prevWeeklyLoad = sumOf(prev7, "total_load")
+  const weeklyLoad = sumOf(last7, "load_estimate")
+  const prevWeeklyLoad = sumOf(prev7, "load_estimate")
   const avgSteps = averageOf(last7, "steps")
   const prevAvgSteps = averageOf(prev7, "steps")
   const avgSleep = averageOf(last7, "sleep_hours")
@@ -115,9 +136,13 @@ export default async function Home({
 
   const heatmapDays = facts.map((f) => ({
     day: f.day,
-    value: num(f.total_load) ?? 0,
+    value: num(f.load_estimate) ?? 0,
     marked: f.had_match === true,
   }))
+
+  // Sessions that still need an RPE, newest first - the one action that
+  // actually improves the numbers above.
+  const unratedRecent = (sessions ?? []).filter((s) => s.rpe == null && s.manual_rpe == null)
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4">
@@ -176,20 +201,34 @@ export default async function Home({
 
         <StatTile
           label="Acute:chronic load"
-          value={latestMetrics?.acwr != null ? latestMetrics.acwr.toFixed(2) : "-"}
-          hint={latestMetrics?.acwr != null ? ACWR_BAND_LABEL[acwrBand(latestMetrics.acwr)] : "needs 28 days"}
-          status={latestMetrics?.acwr != null ? acwrStatus(latestMetrics.acwr) : "neutral"}
+          value={showAcwr ? latestMetrics.acwr!.toFixed(2) : "-"}
+          hint={
+            showAcwr
+              ? ACWR_BAND_LABEL[acwrBand(latestMetrics.acwr!)]
+              : coverage.coverage != null && !coverage.sufficient
+                ? `needs RPE on more sessions (${Math.round(coverage.coverage * 100)}% have it)`
+                : "needs 28 days"
+          }
+          status={showAcwr ? acwrStatus(latestMetrics.acwr!) : "neutral"}
           href="/training-load"
-          sparkline={loadMetrics
-            .slice(-28)
-            .map((m) => m.acwr)
-            .filter((v): v is number => v != null)}
+          sparkline={
+            showAcwr
+              ? loadMetrics
+                  .slice(-28)
+                  .map((m) => m.acwr)
+                  .filter((v): v is number => v != null)
+              : undefined
+          }
         />
 
         <StatTile
           label="Load (7d)"
           value={Math.round(weeklyLoad).toString()}
-          hint={latestMetrics?.monotony != null ? `monotony ${latestMetrics.monotony.toFixed(2)}` : undefined}
+          hint={
+            coverage.sufficient && latestMetrics?.monotony != null
+              ? `monotony ${latestMetrics.monotony.toFixed(2)}`
+              : "partly estimated"
+          }
           href="/training-load"
           delta={
             percentChange(weeklyLoad, prevWeeklyLoad) && {
@@ -198,7 +237,7 @@ export default async function Home({
               periodLabel: "vs prev 7d",
             }
           }
-          sparkline={facts.slice(-28).map((f) => num(f.total_load) ?? 0)}
+          sparkline={facts.slice(-28).map((f) => num(f.load_estimate) ?? 0)}
         />
 
         <StatTile
@@ -246,6 +285,39 @@ export default async function Home({
           sparkline={weightFacts.slice(-30).map((f) => num(f.weight_kg) ?? 0)}
         />
       </div>
+
+      {unratedRecent.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Rate recent sessions</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-xs text-muted-foreground">
+              {coverage.coverage != null
+                ? `Only ${Math.round(coverage.coverage * 100)}% of the last 28 days' sessions have a real intensity reading, so load is partly estimated.`
+                : "Load is partly estimated."}{" "}
+              Rating these makes the numbers above real.
+            </p>
+            {unratedRecent.slice(0, 4).map((s) => (
+              <div key={s.id} className="flex flex-col gap-1.5 border-t pt-3 first:border-t-0 first:pt-0">
+                <Link href={`/sessions/${s.id}`} className="text-sm font-medium hover:underline">
+                  {s.cardio_sessions?.focus ??
+                    s.strength_sessions?.focus ??
+                    SESSION_TYPE_LABEL[s.type] ??
+                    s.type}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {new Date(s.start_time).toLocaleDateString(undefined, {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </span>
+                </Link>
+                <RpeQuickSet sessionId={s.id} currentRpe={null} syncedRpe={s.rpe} compact />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

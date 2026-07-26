@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
+import { RpeQuickSet } from "@/components/RpeQuickSet"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { HeartRateChart } from "./HeartRateChart"
@@ -44,7 +45,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const { data: session } = await supabase
     .from("sessions")
     .select(
-      "id, type, start_time, end_time, rpe, location, surface, calories_kcal, active_duration_seconds, active_zone_minutes, hr_zones, external_source, merged_into"
+      "id, type, start_time, end_time, rpe, manual_rpe, location, surface, calories_kcal, active_duration_seconds, active_zone_minutes, hr_zones, external_source, merged_into"
     )
     .eq("id", id)
     .maybeSingle()
@@ -149,10 +150,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <dd className="font-medium">{duration}</dd>
                 </div>
               )}
-              {session.rpe != null && (
+              {(session.manual_rpe ?? session.rpe) != null && (
                 <div>
                   <dt className="text-muted-foreground">RPE</dt>
-                  <dd className="font-medium">{session.rpe}</dd>
+                  <dd className="font-medium">
+                    {session.manual_rpe ?? session.rpe}
+                    {session.manual_rpe != null && session.rpe != null && session.manual_rpe !== session.rpe && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        (yours; source said {session.rpe})
+                      </span>
+                    )}
+                  </dd>
                 </div>
               )}
               {session.calories_kcal != null && (
@@ -192,6 +200,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 </div>
               )}
             </dl>
+
+            <div className="mt-4 border-t pt-4">
+              <p className="mb-2 text-sm font-medium">Your RPE</p>
+              <RpeQuickSet
+                sessionId={session.id}
+                currentRpe={session.manual_rpe}
+                syncedRpe={session.rpe}
+              />
+            </div>
 
             {hrZones && (
               <div className="mt-4 border-t pt-4">

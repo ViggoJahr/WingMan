@@ -622,6 +622,7 @@ export type Database = {
           hr_zones: Json | null
           id: string
           location: string | null
+          manual_rpe: number | null
           merged_into: string | null
           raw_payload: Json | null
           rpe: number | null
@@ -640,6 +641,7 @@ export type Database = {
           hr_zones?: Json | null
           id?: string
           location?: string | null
+          manual_rpe?: number | null
           merged_into?: string | null
           raw_payload?: Json | null
           rpe?: number | null
@@ -658,6 +660,7 @@ export type Database = {
           hr_zones?: Json | null
           id?: string
           location?: string | null
+          manual_rpe?: number | null
           merged_into?: string | null
           raw_payload?: Json | null
           rpe?: number | null
@@ -899,6 +902,9 @@ export type Database = {
           day: string | null
           session_count: number | null
           total_load: number | null
+          load_estimate: number | null
+          sessions_with_intensity: number | null
+          sessions_with_rpe: number | null
           max_rpe: number | null
           total_duration_min: number | null
           calories_kcal: number | null

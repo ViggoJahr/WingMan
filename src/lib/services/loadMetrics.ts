@@ -19,6 +19,40 @@ export const CHRONIC_DAYS = 28
 export interface DailyLoadPoint {
   day: string
   load: number
+  /** Sessions that day whose intensity came from a real RPE or heart-rate zones. */
+  sessionsWithIntensity?: number
+  /** Total sessions that day, including ones whose load had to be assumed. */
+  sessionCount?: number
+}
+
+/**
+ * Below this share of sessions carrying real intensity data, ACWR and friends
+ * describe the guesses more than the training, so callers should withhold them
+ * rather than show a confident band. Set at half: with less than that, the
+ * assumed-RPE fallback dominates the series.
+ */
+export const MIN_INTENSITY_COVERAGE = 0.5
+
+export interface CoverageSummary {
+  sessionCount: number
+  sessionsWithIntensity: number
+  /** 0-1. Null when the window contains no sessions at all. */
+  coverage: number | null
+  sufficient: boolean
+}
+
+/** Coverage over a window - used to decide whether to trust ACWR at all. */
+export function intensityCoverage(points: DailyLoadPoint[]): CoverageSummary {
+  const sessionCount = points.reduce((acc, p) => acc + (p.sessionCount ?? 0), 0)
+  const sessionsWithIntensity = points.reduce((acc, p) => acc + (p.sessionsWithIntensity ?? 0), 0)
+  const coverage = sessionCount > 0 ? sessionsWithIntensity / sessionCount : null
+
+  return {
+    sessionCount,
+    sessionsWithIntensity,
+    coverage,
+    sufficient: coverage != null && coverage >= MIN_INTENSITY_COVERAGE,
+  }
 }
 
 export interface LoadMetricsPoint {

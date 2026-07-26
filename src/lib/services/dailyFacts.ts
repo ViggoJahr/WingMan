@@ -12,7 +12,8 @@ export type DailyFact = Database["public"]["Views"]["daily_facts"]["Row"]
 export type DailyFactRow = DailyFact & { day: string }
 
 export const DAILY_FACT_COLUMNS =
-  "day, session_count, total_load, max_rpe, total_duration_min, calories_kcal, " +
+  "day, session_count, total_load, load_estimate, sessions_with_intensity, " +
+  "sessions_with_rpe, max_rpe, total_duration_min, calories_kcal, " +
   "had_match, had_practice, had_strength, perceived_performance, perceived_challenge, " +
   "readiness_score, muscle_soreness, mental_stress, current_injury, current_illness, " +
   "sleep_quality, food_beverage, mood, recovery_energy, readiness_training_load, " +

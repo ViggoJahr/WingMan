@@ -141,7 +141,17 @@ the code comments note the attach UI was left for later. This is what makes
 practice logging genuinely frictionless — two taps on a session that already
 exists, rather than a form.
 
-#### 2. Persist HR and deepen time-series
+#### 2. Persist raw heart-rate — now the highest-value item
+
+Promoted after measuring intensity coverage on 2026-07-26 (see "Training load
+and the RPE gap" below). Raw `heart-rate` is sampled passively all day,
+**independent of whether the watch classified a workout as an exercise**. So
+computing load for a session doesn't require the device to have recognised it —
+only that HR samples cover its time window, which they do whenever the watch was
+worn.
+
+That is the difference between ~26% intensity coverage and near-total, which in
+turn is the difference between ACWR being displayable and not.
 
 `getHeartRateTimeline` currently does a fresh OAuth token exchange **and** a
 Google rollUp POST on every single session-detail page view, and stores nothing.
@@ -212,6 +222,70 @@ the preceding 3 / 7 / 28 days, ACWR, days since last match, kickoff time of day.
   Google Health.
 
 ---
+
+## Training load and the RPE gap
+
+Measured 2026-07-26 against real data, after the heatmap showed a genuine
+training day as a rest day.
+
+**Only 19 of 74 sessions (26%) carry an RPE** — 18/65 from TUGG, 1/9 from Google
+Health. This is not a mapping bug: TUGG's gym `workout_sessions` payload has no
+`rpe` field at all. Only its `endurance_runs` have one (10/10 populated). So
+session-RPE load, which is undefined without an RPE, was silently reporting most
+training days as zero — and ACWR, monotony and strain were being computed over a
+series that was ~74% false zeros. They were displayed as confident, banded,
+colour-coded numbers. That was worse than showing nothing.
+
+The response separates two questions that had been conflated:
+
+**"Did I train?"** — always answerable from duration and session count.
+
+**"How hard?"** — resolved through tiers, in `daily_facts`, all expressed in the
+same unit (RPE × hours) so one colour scale stays meaningful:
+
+| Tier | Source | Quality |
+|---|---|---|
+| 1 | `manual_rpe` or synced `rpe` | `measured` |
+| 2 | Heart-rate zone durations → Borg-anchored RPE equivalent (light 10, moderate 13, vigorous 16, peak 19) | `hr_derived` |
+| 3 | Duration only, at a deliberately conservative assumed RPE of 11 | `assumed` |
+
+The view exposes both `total_load` (strictly measured, honest) and
+`load_estimate` (tiered), plus `sessions_with_intensity` / `session_count` so
+consumers can judge trustworthiness. **ACWR and monotony are withheld entirely
+below 50% coverage** rather than shown as a band.
+
+`sessions.manual_rpe` is a user-supplied RPE that the sync path never writes, so
+it can be added to a *synced* session without the next sync overwriting it —
+adapters own `rpe`, the user owns `manual_rpe`, and load prefers the latter.
+This is also what makes the app usable with no wearable at all.
+
+## What Google Health actually provides
+
+Probed live against the API on 2026-07-26 across 41 candidate data types, rather
+than inferred from docs. Platform reports as **FITBIT**.
+
+**Returning data (11):** `exercise`, `sleep`, `steps`, `daily-resting-heart-rate`,
+`heart-rate-variability`, `oxygen-saturation`, `active-zone-minutes`, `weight`,
+`body-fat`, `height`, `heart-rate`.
+
+All are synced except raw `heart-rate`, which is fetched on demand per session
+view and never persisted — see medium-term item 2.
+
+**Valid types but empty for this device:** `vo2-max`, `blood-glucose`,
+`distance`.
+
+**Not offered by the v4 API at all** (400/404): nutrition, hydration, blood
+pressure, respiratory rate, body/skin temperature, floors climbed, elevation,
+speed, power, cadence, lean body mass, bone mass, mindfulness, all
+cycle-tracking types.
+
+**Important correction:** an earlier note claimed nutrition/hydration/ECG were
+blocked behind unrequested OAuth scopes. That is wrong — the probe returned
+**zero 403s**. The three existing scopes already grant everything the API
+exposes; those data types simply do not exist. Re-consenting would gain nothing.
+
+The gap is therefore not collection but use: raw heart-rate isn't persisted, and
+sleep stages, body fat and height sit in the database unshown.
 
 ## Metrics glossary
 
