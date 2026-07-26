@@ -2,63 +2,93 @@
 
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import {
+  endTimeFrom,
+  workoutSchema,
+  workoutUpdateSchema,
+  type WorkoutType,
+} from "@/lib/validation/schemas"
+import { failure, validationError, type ActionState } from "@/lib/validation/formState"
 
-export async function logWorkout(formData: FormData) {
+type SubtypeInput = { focus: string | null; distance_km: number | null }
+
+/**
+ * Writes the type-specific companion row. mobility_rehab has no subtype table -
+ * the sessions row alone carries everything it needs.
+ */
+async function writeSubtype(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sessionId: string,
+  type: WorkoutType,
+  input: SubtypeInput,
+  mode: "insert" | "update"
+): Promise<string | null> {
+  const distanceM = input.distance_km != null ? Math.round(input.distance_km * 1000) : null
+
+  if (type === "cardio") {
+    const payload = { focus: input.focus, distance_m: distanceM }
+    const { error } =
+      mode === "insert"
+        ? await supabase.from("cardio_sessions").insert({ session_id: sessionId, ...payload })
+        : await supabase.from("cardio_sessions").update(payload).eq("session_id", sessionId)
+    return error?.message ?? null
+  }
+
+  if (type === "strength_power") {
+    const { error } =
+      mode === "insert"
+        ? await supabase.from("strength_sessions").insert({ session_id: sessionId, focus: input.focus })
+        : await supabase.from("strength_sessions").update({ focus: input.focus }).eq("session_id", sessionId)
+    return error?.message ?? null
+  }
+
+  if (type === "active_rest") {
+    const { error } =
+      mode === "insert"
+        ? await supabase.from("active_rest").insert({ session_id: sessionId, focus: input.focus })
+        : await supabase.from("active_rest").update({ focus: input.focus }).eq("session_id", sessionId)
+    return error?.message ?? null
+  }
+
+  return null
+}
+
+export async function logWorkout(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const type = formData.get("type") as "cardio" | "strength_power" | "mobility_rehab" | "active_rest"
-  const startTime = formData.get("start_time") as string
-  const durationMinutes = Number(formData.get("duration_minutes"))
-  const endTime = new Date(new Date(startTime).getTime() + durationMinutes * 60_000)
-  const focus = (formData.get("focus") as string) || null
-  const rpe = formData.get("rpe") ? Number(formData.get("rpe")) : null
-  const location = (formData.get("location") as string) || null
-  const distanceKm = formData.get("distance_km") ? Number(formData.get("distance_km")) : null
+  const parsed = workoutSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return validationError(parsed.error, formData)
+  const input = parsed.data
 
   const { data: session, error: sessionErr } = await supabase
     .from("sessions")
     .insert({
       user_id: user.id,
-      type,
-      start_time: new Date(startTime).toISOString(),
-      end_time: endTime.toISOString(),
-      rpe,
-      location,
+      type: input.type,
+      start_time: new Date(input.start_time).toISOString(),
+      end_time: endTimeFrom(input.start_time, input.duration_minutes),
+      rpe: input.rpe,
+      location: input.location,
     })
     .select("id")
     .single()
-  if (sessionErr) throw new Error(sessionErr.message)
+  if (sessionErr) return failure(sessionErr.message, formData)
 
-  if (type === "cardio") {
-    const { error } = await supabase.from("cardio_sessions").insert({
-      session_id: session.id,
-      focus,
-      distance_m: distanceKm ? Math.round(distanceKm * 1000) : null,
-    })
-    if (error) throw new Error(error.message)
-  } else if (type === "strength_power") {
-    const { error } = await supabase.from("strength_sessions").insert({
-      session_id: session.id,
-      focus,
-    })
-    if (error) throw new Error(error.message)
-  } else if (type === "active_rest") {
-    const { error } = await supabase.from("active_rest").insert({
-      session_id: session.id,
-      focus,
-    })
-    if (error) throw new Error(error.message)
-  }
-  // mobility_rehab has no subtype table - the sessions row alone is enough.
+  const subtypeErr = await writeSubtype(supabase, session.id, input.type, input, "insert")
+  if (subtypeErr) return failure(subtypeErr, formData)
 
   redirect("/?logged=workout")
 }
 
-export async function updateWorkout(sessionId: string, formData: FormData) {
+export async function updateWorkout(
+  sessionId: string,
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -70,44 +100,35 @@ export async function updateWorkout(sessionId: string, formData: FormData) {
     .select("external_source, type")
     .eq("id", sessionId)
     .single()
-  if (fetchErr) throw new Error(fetchErr.message)
+  if (fetchErr) return failure(fetchErr.message, formData)
   if (existing.external_source !== null) {
-    throw new Error("Synced sessions can't be edited - they'd just be overwritten by the next sync.")
+    return failure(
+      "Synced sessions can't be edited - they'd just be overwritten by the next sync.",
+      formData
+    )
   }
 
-  const type = existing.type as "cardio" | "strength_power" | "mobility_rehab" | "active_rest"
-  const startTime = formData.get("start_time") as string
-  const durationMinutes = Number(formData.get("duration_minutes"))
-  const endTime = new Date(new Date(startTime).getTime() + durationMinutes * 60_000)
-  const focus = (formData.get("focus") as string) || null
-  const rpe = formData.get("rpe") ? Number(formData.get("rpe")) : null
-  const location = (formData.get("location") as string) || null
-  const distanceKm = formData.get("distance_km") ? Number(formData.get("distance_km")) : null
+  // Type is fixed after creation: changing it would mean migrating the row
+  // between subtype tables, so the form renders it read-only and it is read
+  // from the database rather than the submitted data.
+  const parsed = workoutUpdateSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return validationError(parsed.error, formData)
+  const input = parsed.data
+  const type = existing.type as WorkoutType
 
   const { error: sessionErr } = await supabase
     .from("sessions")
     .update({
-      start_time: new Date(startTime).toISOString(),
-      end_time: endTime.toISOString(),
-      rpe,
-      location,
+      start_time: new Date(input.start_time).toISOString(),
+      end_time: endTimeFrom(input.start_time, input.duration_minutes),
+      rpe: input.rpe,
+      location: input.location,
     })
     .eq("id", sessionId)
-  if (sessionErr) throw new Error(sessionErr.message)
+  if (sessionErr) return failure(sessionErr.message, formData)
 
-  if (type === "cardio") {
-    const { error } = await supabase
-      .from("cardio_sessions")
-      .update({ focus, distance_m: distanceKm ? Math.round(distanceKm * 1000) : null })
-      .eq("session_id", sessionId)
-    if (error) throw new Error(error.message)
-  } else if (type === "strength_power") {
-    const { error } = await supabase.from("strength_sessions").update({ focus }).eq("session_id", sessionId)
-    if (error) throw new Error(error.message)
-  } else if (type === "active_rest") {
-    const { error } = await supabase.from("active_rest").update({ focus }).eq("session_id", sessionId)
-    if (error) throw new Error(error.message)
-  }
+  const subtypeErr = await writeSubtype(supabase, sessionId, type, input, "update")
+  if (subtypeErr) return failure(subtypeErr, formData)
 
   redirect(`/sessions/${sessionId}`)
 }

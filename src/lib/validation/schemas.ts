@@ -1,0 +1,129 @@
+import { z } from "zod"
+
+// FormData only ever yields strings, and an untouched optional input arrives
+// as "". Before these schemas existed the actions did `Number(formData.get(x))`
+// directly, so a blank field became NaN, flowed into `new Date(NaN)` and blew
+// up on .toISOString() - or silently wrote NaN into the database.
+
+const emptyToNull = (value: unknown) => (value === "" || value == null ? null : value)
+const emptyToZero = (value: unknown) => (value === "" || value == null ? 0 : value)
+
+const optionalText = z.preprocess(emptyToNull, z.string().trim().min(1).nullable())
+
+function optionalInt(min: number, max: number) {
+  return z.preprocess(emptyToNull, z.coerce.number().int().min(min).max(max).nullable())
+}
+
+function optionalDecimal(min: number, max: number) {
+  return z.preprocess(emptyToNull, z.coerce.number().min(min).max(max).nullable())
+}
+
+/** Counting stats default to 0 rather than null - "didn't score" is a real 0. */
+function countInt(max = 999) {
+  return z.preprocess(emptyToZero, z.coerce.number().int().min(0).max(max))
+}
+
+function requiredInt(min: number, max: number) {
+  return z.coerce.number().int().min(min).max(max)
+}
+
+/** Value of an <input type="datetime-local">, e.g. "2026-07-25T18:30". */
+const localDateTime = z
+  .string()
+  .min(1, "Start time is required")
+  .refine((v) => !Number.isNaN(new Date(v).getTime()), "Not a valid date and time")
+
+/** Value of an <input type="date">. */
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Not a valid date")
+  .refine((v) => !Number.isNaN(new Date(v).getTime()), "Not a valid date")
+
+/** Unchecked checkboxes are absent from FormData entirely. */
+const checkbox = z.preprocess((v) => v === "on" || v === "true", z.boolean())
+
+// RPE is constrained to 1-20 by a CHECK constraint on sessions; the 1-10
+// scales below match the CHECK constraints on their own tables.
+const rpe = optionalInt(1, 20)
+
+const sessionCore = {
+  start_time: localDateTime,
+  duration_minutes: z.coerce
+    .number()
+    .int()
+    .min(1, "Duration must be at least 1 minute")
+    .max(1440, "Duration can't exceed 24 hours"),
+  rpe,
+  location: optionalText,
+}
+
+export const practiceSchema = z.object({
+  ...sessionCore,
+  practice_focus: optionalText,
+  defense_vs_attack_ratio: optionalText,
+  tactical_complexity: optionalInt(1, 10),
+  comments: optionalText,
+})
+
+export const WORKOUT_TYPES = ["cardio", "strength_power", "mobility_rehab", "active_rest"] as const
+export type WorkoutType = (typeof WORKOUT_TYPES)[number]
+
+export const workoutUpdateSchema = z.object({
+  ...sessionCore,
+  focus: optionalText,
+  distance_km: optionalDecimal(0, 1000),
+})
+
+export const workoutSchema = workoutUpdateSchema.extend({
+  type: z.enum(WORKOUT_TYPES),
+})
+
+export const matchSchema = z.object({
+  start_time: localDateTime,
+  play_time_min: optionalInt(0, 200),
+  rpe,
+  location: optionalText,
+  opponent: optionalText,
+  is_home: checkbox,
+  comments: optionalText,
+  perceived_performance: optionalInt(1, 10),
+  perceived_challenge: optionalInt(1, 10),
+  importance: optionalInt(1, 10),
+  opposition_difficulty: optionalInt(1, 10),
+  goals: countInt(),
+  assists: countInt(),
+  technical_faults: countInt(),
+  steals: countInt(),
+  shots_missed: countInt(),
+  shots_saved: countInt(),
+  nine_m_shots: countInt(),
+  breakthroughs: countInt(),
+  suspensions_created: countInt(),
+  suspensions_received: countInt(),
+  blocks: countInt(),
+  big_mistakes: countInt(),
+})
+
+export const readinessSchema = z.object({
+  date: isoDate,
+  notes: optionalText,
+  training_load: requiredInt(0, 10),
+  muscle_soreness: requiredInt(0, 10),
+  mental_stress: requiredInt(0, 10),
+  current_injury: requiredInt(0, 10),
+  current_illness: requiredInt(0, 10),
+  sleep_quality: requiredInt(0, 10),
+  food_beverage: requiredInt(0, 10),
+  mood: requiredInt(0, 10),
+  recovery_energy: requiredInt(0, 10),
+})
+
+export type PracticeInput = z.infer<typeof practiceSchema>
+export type WorkoutInput = z.infer<typeof workoutSchema>
+export type MatchInput = z.infer<typeof matchSchema>
+export type ReadinessInput = z.infer<typeof readinessSchema>
+
+/** Sessions store an end_time rather than a duration. */
+export function endTimeFrom(startTime: string, durationMinutes: number): string {
+  return new Date(new Date(startTime).getTime() + durationMinutes * 60_000).toISOString()
+}

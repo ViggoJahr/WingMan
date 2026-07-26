@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { useActionState, useState } from "react"
 import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Textarea } from "@/components/ui/textarea"
+import { FormAlert, SubmitButton } from "@/components/forms/FormParts"
+import { idleState } from "@/lib/validation/formState"
 import { cn } from "@/lib/utils"
 import {
   READINESS_DIMENSIONS,
@@ -30,21 +31,21 @@ const DEFAULTS: Record<ReadinessField, number> = {
 }
 
 const SEVERITY_TEXT: Record<Severity, string> = {
-  good: "text-[var(--status-good)]",
-  warning: "text-[var(--status-warning)]",
-  critical: "text-[var(--status-critical)]",
+  good: "text-status-good",
+  warning: "text-status-warning",
+  critical: "text-status-critical",
 }
 
 const SEVERITY_BG: Record<Severity, string> = {
-  good: "bg-[var(--status-good)]",
-  warning: "bg-[var(--status-warning)]",
-  critical: "bg-[var(--status-critical)]",
+  good: "bg-status-good",
+  warning: "bg-status-warning",
+  critical: "bg-status-critical",
 }
 
 const SEVERITY_BORDER: Record<Severity, string> = {
-  good: "border-[var(--status-good)]",
-  warning: "border-[var(--status-warning)]",
-  critical: "border-[var(--status-critical)]",
+  good: "border-status-good",
+  warning: "border-status-warning",
+  critical: "border-status-critical",
 }
 
 export interface ExistingReadiness {
@@ -86,8 +87,12 @@ export function ReadinessForm({
       : {}),
   })
 
+  const [state, formAction] = useActionState(logReadiness, idleState)
+
   return (
-    <form action={logReadiness} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4">
+      <FormAlert state={state} />
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="date">Date</Label>
         <Input id="date" name="date" type="date" defaultValue={date} required />
@@ -133,9 +138,9 @@ export function ReadinessForm({
       </div>
 
       <div className="mt-1 flex gap-2">
-        <Button type="submit" className="flex-1">
+        <SubmitButton className="flex-1">
           {existingValues ? "Save changes" : "Save check-in"}
-        </Button>
+        </SubmitButton>
         {existingValues && (
           <ConfirmDeleteButton
             action={deleteReadiness.bind(null, date)}

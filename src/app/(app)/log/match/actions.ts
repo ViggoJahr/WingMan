@@ -2,85 +2,85 @@
 
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { matchSchema, type MatchInput } from "@/lib/validation/schemas"
+import { failure, validationError, type ActionState } from "@/lib/validation/formState"
 
-function numOrNull(formData: FormData, key: string) {
-  const v = formData.get(key)
-  return v ? Number(v) : null
+/** The box-score columns, identical between insert and update. */
+function matchStats(input: MatchInput) {
+  return {
+    opponent: input.opponent,
+    is_home: input.is_home,
+    play_time_min: input.play_time_min,
+    importance: input.importance,
+    opposition_difficulty: input.opposition_difficulty,
+    goals: input.goals,
+    assists: input.assists,
+    technical_faults: input.technical_faults,
+    steals: input.steals,
+    shots_missed: input.shots_missed,
+    shots_saved: input.shots_saved,
+    nine_m_shots: input.nine_m_shots,
+    breakthroughs: input.breakthroughs,
+    suspensions_created: input.suspensions_created,
+    suspensions_received: input.suspensions_received,
+    blocks: input.blocks,
+    big_mistakes: input.big_mistakes,
+  }
 }
 
-function numOrZero(formData: FormData, key: string) {
-  const v = formData.get(key)
-  return v ? Number(v) : 0
+/** A match with no recorded play time is stored as a zero-length session. */
+function matchEndTime(input: MatchInput): string {
+  const start = new Date(input.start_time).getTime()
+  return new Date(start + (input.play_time_min ?? 0) * 60_000).toISOString()
 }
 
-export async function logMatch(formData: FormData) {
+export async function logMatch(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  const startTime = formData.get("start_time") as string
-  const playTimeMin = numOrNull(formData, "play_time_min")
-  const endTime = playTimeMin
-    ? new Date(new Date(startTime).getTime() + playTimeMin * 60_000)
-    : new Date(startTime)
-
-  const rpe = numOrNull(formData, "rpe")
-  const location = (formData.get("location") as string) || null
-  const opponent = (formData.get("opponent") as string) || null
-  const isHome = formData.get("is_home") === "on"
-  const comments = (formData.get("comments") as string) || null
+  const parsed = matchSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return validationError(parsed.error, formData)
+  const input = parsed.data
 
   const { data: session, error: sessionErr } = await supabase
     .from("sessions")
     .insert({
       user_id: user.id,
       type: "handball",
-      start_time: new Date(startTime).toISOString(),
-      end_time: endTime.toISOString(),
-      rpe,
-      location,
+      start_time: new Date(input.start_time).toISOString(),
+      end_time: matchEndTime(input),
+      rpe: input.rpe,
+      location: input.location,
     })
     .select("id")
     .single()
-  if (sessionErr) throw new Error(sessionErr.message)
+  if (sessionErr) return failure(sessionErr.message, formData)
 
   const { error: handballErr } = await supabase.from("handball_sessions").insert({
     session_id: session.id,
     subtype: "match",
-    perceived_performance: numOrNull(formData, "perceived_performance"),
-    perceived_challenge: numOrNull(formData, "perceived_challenge"),
-    comments,
+    perceived_performance: input.perceived_performance,
+    perceived_challenge: input.perceived_challenge,
+    comments: input.comments,
   })
-  if (handballErr) throw new Error(handballErr.message)
+  if (handballErr) return failure(handballErr.message, formData)
 
-  const { error: matchErr } = await supabase.from("matches").insert({
-    session_id: session.id,
-    opponent,
-    is_home: isHome,
-    play_time_min: playTimeMin,
-    importance: numOrNull(formData, "importance"),
-    opposition_difficulty: numOrNull(formData, "opposition_difficulty"),
-    goals: numOrZero(formData, "goals"),
-    assists: numOrZero(formData, "assists"),
-    technical_faults: numOrZero(formData, "technical_faults"),
-    steals: numOrZero(formData, "steals"),
-    shots_missed: numOrZero(formData, "shots_missed"),
-    shots_saved: numOrZero(formData, "shots_saved"),
-    nine_m_shots: numOrZero(formData, "nine_m_shots"),
-    breakthroughs: numOrZero(formData, "breakthroughs"),
-    suspensions_created: numOrZero(formData, "suspensions_created"),
-    suspensions_received: numOrZero(formData, "suspensions_received"),
-    blocks: numOrZero(formData, "blocks"),
-    big_mistakes: numOrZero(formData, "big_mistakes"),
-  })
-  if (matchErr) throw new Error(matchErr.message)
+  const { error: matchErr } = await supabase
+    .from("matches")
+    .insert({ session_id: session.id, ...matchStats(input) })
+  if (matchErr) return failure(matchErr.message, formData)
 
   redirect("/?logged=match")
 }
 
-export async function updateMatch(sessionId: string, formData: FormData) {
+export async function updateMatch(
+  sessionId: string,
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -92,67 +92,44 @@ export async function updateMatch(sessionId: string, formData: FormData) {
     .select("external_source")
     .eq("id", sessionId)
     .single()
-  if (fetchErr) throw new Error(fetchErr.message)
+  if (fetchErr) return failure(fetchErr.message, formData)
   if (existing.external_source !== null) {
-    throw new Error("Synced sessions can't be edited - they'd just be overwritten by the next sync.")
+    return failure(
+      "Synced sessions can't be edited - they'd just be overwritten by the next sync.",
+      formData
+    )
   }
 
-  const startTime = formData.get("start_time") as string
-  const playTimeMin = numOrNull(formData, "play_time_min")
-  const endTime = playTimeMin
-    ? new Date(new Date(startTime).getTime() + playTimeMin * 60_000)
-    : new Date(startTime)
-
-  const rpe = numOrNull(formData, "rpe")
-  const location = (formData.get("location") as string) || null
-  const opponent = (formData.get("opponent") as string) || null
-  const isHome = formData.get("is_home") === "on"
-  const comments = (formData.get("comments") as string) || null
+  const parsed = matchSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return validationError(parsed.error, formData)
+  const input = parsed.data
 
   const { error: sessionErr } = await supabase
     .from("sessions")
     .update({
-      start_time: new Date(startTime).toISOString(),
-      end_time: endTime.toISOString(),
-      rpe,
-      location,
+      start_time: new Date(input.start_time).toISOString(),
+      end_time: matchEndTime(input),
+      rpe: input.rpe,
+      location: input.location,
     })
     .eq("id", sessionId)
-  if (sessionErr) throw new Error(sessionErr.message)
+  if (sessionErr) return failure(sessionErr.message, formData)
 
   const { error: handballErr } = await supabase
     .from("handball_sessions")
     .update({
-      perceived_performance: numOrNull(formData, "perceived_performance"),
-      perceived_challenge: numOrNull(formData, "perceived_challenge"),
-      comments,
+      perceived_performance: input.perceived_performance,
+      perceived_challenge: input.perceived_challenge,
+      comments: input.comments,
     })
     .eq("session_id", sessionId)
-  if (handballErr) throw new Error(handballErr.message)
+  if (handballErr) return failure(handballErr.message, formData)
 
   const { error: matchErr } = await supabase
     .from("matches")
-    .update({
-      opponent,
-      is_home: isHome,
-      play_time_min: playTimeMin,
-      importance: numOrNull(formData, "importance"),
-      opposition_difficulty: numOrNull(formData, "opposition_difficulty"),
-      goals: numOrZero(formData, "goals"),
-      assists: numOrZero(formData, "assists"),
-      technical_faults: numOrZero(formData, "technical_faults"),
-      steals: numOrZero(formData, "steals"),
-      shots_missed: numOrZero(formData, "shots_missed"),
-      shots_saved: numOrZero(formData, "shots_saved"),
-      nine_m_shots: numOrZero(formData, "nine_m_shots"),
-      breakthroughs: numOrZero(formData, "breakthroughs"),
-      suspensions_created: numOrZero(formData, "suspensions_created"),
-      suspensions_received: numOrZero(formData, "suspensions_received"),
-      blocks: numOrZero(formData, "blocks"),
-      big_mistakes: numOrZero(formData, "big_mistakes"),
-    })
+    .update(matchStats(input))
     .eq("session_id", sessionId)
-  if (matchErr) throw new Error(matchErr.message)
+  if (matchErr) return failure(matchErr.message, formData)
 
   redirect(`/sessions/${sessionId}`)
 }
