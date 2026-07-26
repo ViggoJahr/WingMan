@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/server"
+import { isoDaysAgo, timestampDaysAgo } from "@/lib/dates"
 import { TrendChart, type TrendPoint } from "@/components/charts/TrendChart"
 import { SleepChart, StepsChart, WeightChart } from "./charts"
 
@@ -13,26 +14,25 @@ function latestOf(points: TrendPoint[]) {
 
 export default async function HealthPage() {
   const supabase = await createClient()
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
 
   const { data: weightRows } = await supabase
     .from("body_metrics")
     .select("date, weight_kg")
     .not("weight_kg", "is", null)
-    .gte("date", ninetyDaysAgo.toISOString().slice(0, 10))
+    .gte("date", isoDaysAgo(90))
     .order("date", { ascending: true })
 
   const { data: dailyRows } = await supabase
     .from("daily_metrics")
     .select("date, steps, resting_heart_rate, avg_hrv_ms, avg_spo2_percentage, active_zone_minutes")
-    .gte("date", ninetyDaysAgo.toISOString().slice(0, 10))
+    .gte("date", isoDaysAgo(90))
     .order("date", { ascending: true })
 
   const { data: sleepRows } = await supabase
     .from("sleep_logs")
     .select("start_time, duration_minutes")
     .not("duration_minutes", "is", null)
-    .gte("start_time", ninetyDaysAgo.toISOString())
+    .gte("start_time", timestampDaysAgo(90))
     .order("start_time", { ascending: true })
 
   const weightPoints = (weightRows ?? [])
@@ -125,7 +125,7 @@ export default async function HealthPage() {
                 data={restingHrPoints}
                 kind="line"
                 color="chart-2"
-                formatValue={(v) => `${Math.round(v)} bpm`}
+                format={{ decimals: 0, suffix: " bpm" }}
               />
             ) : (
               <p className="text-sm text-muted-foreground">No resting heart rate data synced yet.</p>
@@ -139,7 +139,7 @@ export default async function HealthPage() {
           </CardHeader>
           <CardContent>
             {hrvPoints.length > 0 ? (
-              <TrendChart data={hrvPoints} kind="line" color="chart-3" formatValue={(v) => `${v.toFixed(1)} ms`} />
+              <TrendChart data={hrvPoints} kind="line" color="chart-3" format={{ decimals: 1, suffix: " ms" }} />
             ) : (
               <p className="text-sm text-muted-foreground">No HRV data synced yet.</p>
             )}
@@ -156,7 +156,7 @@ export default async function HealthPage() {
                 data={spo2Points}
                 kind="line"
                 color="chart-4"
-                formatValue={(v) => `${v.toFixed(1)}%`}
+                format={{ decimals: 1, suffix: "%" }}
                 yDomain={[90, 100]}
               />
             ) : (
@@ -177,7 +177,7 @@ export default async function HealthPage() {
           </CardHeader>
           <CardContent>
             {azmPoints.length > 0 ? (
-              <TrendChart data={azmPoints} kind="bar" color="chart-5" formatValue={(v) => `${Math.round(v)} min`} />
+              <TrendChart data={azmPoints} kind="bar" color="chart-5" format={{ decimals: 0, suffix: " min" }} />
             ) : (
               <p className="text-sm text-muted-foreground">No active zone minute data synced yet.</p>
             )}

@@ -59,7 +59,7 @@ export default async function TestsPage() {
                     data={points}
                     kind="line"
                     color="chart-1"
-                    formatValue={(v) => `${v} ${unit}`}
+                    format={{ suffix: ` ${unit}` }}
                   />
                 ) : (
                   <p className="text-sm text-muted-foreground">No usable data points for this test.</p>
@@ -75,7 +75,7 @@ export default async function TestsPage() {
           </CardHeader>
           <CardContent>
             {masPoints.length > 0 ? (
-              <TrendChart data={masPoints} kind="line" color="chart-2" formatValue={(v) => `${v.toFixed(2)} m/s`} />
+              <TrendChart data={masPoints} kind="line" color="chart-2" format={{ decimals: 2, suffix: " m/s" }} />
             ) : (
               <p className="text-sm text-muted-foreground">No MAS test data synced yet.</p>
             )}

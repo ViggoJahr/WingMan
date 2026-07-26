@@ -11,7 +11,7 @@ export function WeightChart({ data }: { data: WeightPoint[] }) {
       data={data.map((d) => ({ date: d.date, value: d.weight_kg }))}
       kind="line"
       color="chart-1"
-      formatValue={(v) => `${v.toFixed(1)} kg`}
+      format={{ decimals: 1, suffix: " kg" }}
     />
   )
 }
@@ -27,7 +27,7 @@ export function StepsChart({ data }: { data: StepsPoint[] }) {
       data={data.map((d) => ({ date: d.date, value: d.steps }))}
       kind="bar"
       color="chart-1"
-      formatValue={(v) => `${v.toLocaleString()} steps`}
+      format={{ grouped: true, suffix: " steps" }}
     />
   )
 }
@@ -43,7 +43,7 @@ export function SleepChart({ data }: { data: SleepPoint[] }) {
       data={data.map((d) => ({ date: d.date, value: d.hours }))}
       kind="bar"
       color="chart-1"
-      formatValue={(v) => `${v.toFixed(1)}h`}
+      format={{ decimals: 1, suffix: "h" }}
     />
   )
 }
