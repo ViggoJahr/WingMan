@@ -157,15 +157,16 @@ export default async function HealthPage() {
                 kind="line"
                 color="chart-4"
                 format={{ decimals: 1, suffix: "%" }}
-                yDomain={[90, 100]}
+                yDomain={[85, 100]}
               />
             ) : (
               <p className="text-sm text-muted-foreground">No SpO2 data synced yet.</p>
             )}
             {spo2Points.length > 0 && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Wrist-based SpO2 readings are often noisy - treat single-day dips as sensor noise rather than a
-                health signal unless they persist.
+                Daily median of readings between 70-100%, since the sensor emits a literal 50% when it
+                can&apos;t get a reading. Days with too few valid samples are omitted entirely. Wrist-based
+                SpO2 is still an estimate - treat single-day dips as sensor noise unless they persist.
               </p>
             )}
           </CardContent>

@@ -213,6 +213,13 @@ function sourceKey(dp: GoogleHealthDataPoint): string {
 interface SourceAgg {
   sum: number
   count: number
+  values: number[]
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
 }
 
 /**
@@ -229,11 +236,20 @@ interface SourceAgg {
  * HR, HRV, SpO2). Here the value from the source with the **most samples** wins,
  * rather than averaging across devices of differing quality and coverage.
  */
+export interface BucketOptions {
+  /** Readings outside [min, max] are discarded as sensor error before aggregating. */
+  min?: number
+  max?: number
+  /** Days with fewer surviving readings than this produce no value at all. */
+  minSamples?: number
+}
+
 export function bucketByDay(
   points: GoogleHealthDataPoint[],
   typeKey: string,
   valueField: string,
-  mode: "sum" | "avg" = "sum"
+  mode: "sum" | "avg" | "median" = "sum",
+  options: BucketOptions = {}
 ) {
   const byDay = new Map<string, Map<string, SourceAgg>>()
 
@@ -249,11 +265,14 @@ export function bucketByDay(
     const raw = payload[valueField]
     const value = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : null
     if (value == null || !Number.isFinite(value)) continue
+    if (options.min != null && value < options.min) continue
+    if (options.max != null && value > options.max) continue
 
     const sources = byDay.get(day) ?? new Map<string, SourceAgg>()
-    const agg = sources.get(sourceKey(dp)) ?? { sum: 0, count: 0 }
+    const agg = sources.get(sourceKey(dp)) ?? { sum: 0, count: 0, values: [] }
     agg.sum += value
     agg.count++
+    if (mode === "median") agg.values.push(value)
     sources.set(sourceKey(dp), agg)
     byDay.set(day, sources)
   }
@@ -265,10 +284,14 @@ export function bucketByDay(
 
     if (mode === "sum") {
       out.set(day, Math.round(Math.max(...perSource.map((a) => a.sum))))
-    } else {
-      const dominant = perSource.reduce((best, a) => (a.count > best.count ? a : best))
-      out.set(day, Math.round((dominant.sum / dominant.count) * 10) / 10)
+      continue
     }
+
+    const dominant = perSource.reduce((best, a) => (a.count > best.count ? a : best))
+    if (options.minSamples != null && dominant.count < options.minSamples) continue
+
+    const value = mode === "median" ? median(dominant.values) : dominant.sum / dominant.count
+    out.set(day, Math.round(value * 10) / 10)
   }
 
   return out

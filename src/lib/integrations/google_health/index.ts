@@ -156,7 +156,18 @@ async function sync(
     "rootMeanSquareOfSuccessiveDifferencesMilliseconds",
     "avg"
   )
-  const spo2ByDay = bucketByDay(results.spo2, "oxygenSaturation", "percentage", "avg")
+  // Fitbit's SpO2 stream is noisy and emits a literal 50 as a "no valid
+  // reading" sentinel - 656 of 5015 readings (13%) sat at exactly 50.0, which
+  // dragged the daily mean to 86.9% against a median of 94%. Values below 70%
+  // are discarded as sensor error (they are not survivable while awake and
+  // walking around), the median is used instead of the mean so the remaining
+  // noise cannot move the result much, and a day needs a real sample count
+  // before it reports anything at all.
+  const spo2ByDay = bucketByDay(results.spo2, "oxygenSaturation", "percentage", "median", {
+    min: 70,
+    max: 100,
+    minSamples: 20,
+  })
   const azmByDay = bucketByDay(results.activeZoneMinutes, "activeZoneMinutes", "activeZoneMinutes", "sum")
 
   const days = new Set([

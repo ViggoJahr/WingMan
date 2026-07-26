@@ -236,6 +236,45 @@ describe("bucketByDay", () => {
     expect(byDay.get("2026-07-25")).toBe(97)
   })
 
+  // Confirmed live: 656 of 5015 SpO2 readings sat at exactly 50.0 - a
+  // sentinel, not a measurement - pulling the daily mean to 86.9% against a
+  // median of 94%.
+  it("discards out-of-range sensor errors and uses the median", () => {
+    const date = { year: 2026, month: 7, day: 23 }
+    const reading = (v: number) => ({
+      dataSource: { platform: "FITBIT", device: {} },
+      oxygenSaturation: { date, percentage: v },
+    })
+
+    const points = [
+      ...Array.from({ length: 10 }, () => reading(50)), // sentinels
+      ...Array.from({ length: 21 }, () => reading(97)),
+    ]
+
+    const byDay = bucketByDay(points, "oxygenSaturation", "percentage", "median", {
+      min: 70,
+      max: 100,
+      minSamples: 20,
+    })
+
+    expect(byDay.get("2026-07-23")).toBe(97)
+  })
+
+  it("reports nothing for a day with too few valid readings", () => {
+    const date = { year: 2026, month: 7, day: 17 }
+    const points = [
+      { dataSource: { platform: "FITBIT", device: {} }, oxygenSaturation: { date, percentage: 50 } },
+      { dataSource: { platform: "FITBIT", device: {} }, oxygenSaturation: { date, percentage: 99 } },
+    ]
+
+    const byDay = bucketByDay(points, "oxygenSaturation", "percentage", "median", {
+      min: 70,
+      minSamples: 20,
+    })
+
+    expect(byDay.has("2026-07-17")).toBe(false)
+  })
+
   it("keeps a single-source day unchanged", () => {
     const points = [
       {

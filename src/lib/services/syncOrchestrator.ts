@@ -5,7 +5,13 @@ import { mergeOverlappingSessions } from "./sessionMerge"
 export async function runSync(accountId?: string) {
   const db = createServiceRoleClient()
 
-  let query = db.from("integration_accounts").select("*").eq("status", "active")
+  // Everything except explicitly disabled accounts. Previously this selected
+  // only status = 'active', while a failure set status = 'error' - so a single
+  // transient failure (an expired token, a bad env var on the deploy) excluded
+  // that integration from every future run, permanently, with nothing to flip
+  // it back. Both accounts sat dead for a day that way. 'error' is now purely
+  // informational for the UI; only 'disabled' actually stops syncing.
+  let query = db.from("integration_accounts").select("*").neq("status", "disabled")
   if (accountId) query = query.eq("id", accountId)
   const { data: accounts, error } = await query
   if (error) throw new Error(`Failed to load integration accounts: ${error.message}`)
