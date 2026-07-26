@@ -893,10 +893,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      daily_facts: {
+        Row: {
+          user_id: string | null
+          day: string | null
+          session_count: number | null
+          total_load: number | null
+          max_rpe: number | null
+          total_duration_min: number | null
+          calories_kcal: number | null
+          had_match: boolean | null
+          had_practice: boolean | null
+          had_strength: boolean | null
+          perceived_performance: number | null
+          perceived_challenge: number | null
+          readiness_score: number | null
+          readiness_training_load: number | null
+          muscle_soreness: number | null
+          mental_stress: number | null
+          current_injury: number | null
+          current_illness: number | null
+          sleep_quality: number | null
+          food_beverage: number | null
+          mood: number | null
+          recovery_energy: number | null
+          weight_kg: number | null
+          body_fat_percentage: number | null
+          steps: number | null
+          resting_heart_rate: number | null
+          avg_hrv_ms: number | null
+          avg_spo2_percentage: number | null
+          active_zone_minutes: number | null
+          sleep_hours: number | null
+          dow: number | null
+          is_weekend: boolean | null
+          days_since_last_match: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      app_local_date: {
+        Args: { ts: string }
+        Returns: string
+      }
     }
     Enums: {
       handball_subtype: "individual" | "team_practice" | "match"
