@@ -195,18 +195,47 @@ export function normalizeHeight(dp: GoogleHealthDataPoint, userId: string) {
   }
 }
 
-// Buckets a numeric field to local calendar day. `mode: "sum"` for
-// cumulative counts (steps, active zone minutes), `mode: "avg"` for
-// point-in-time measurements sampled repeatedly through the day
-// (resting HR, HRV, SpO2).
+/**
+ * Identifies the device/platform that recorded a data point.
+ *
+ * Confirmed live (2026-07-26): the same physical steps arrive from up to three
+ * sources at once - the Fitbit band, Fitbit's phone-based "MobileTrack", and
+ * the Samsung phone via Health Connect. They are duplicate measurements of one
+ * reality, not separate activity.
+ */
+function sourceKey(dp: GoogleHealthDataPoint): string {
+  const source = (dp.dataSource ?? {}) as { platform?: string; device?: Record<string, unknown> }
+  const device =
+    source.device && Object.keys(source.device).length > 0 ? JSON.stringify(source.device) : ""
+  return `${source.platform ?? "unknown"}|${device}`
+}
+
+interface SourceAgg {
+  sum: number
+  count: number
+}
+
+/**
+ * Buckets a numeric field to local calendar day, resolving multiple recording
+ * sources rather than conflating them.
+ *
+ * `mode: "sum"` is for cumulative counts (steps, active zone minutes). Each
+ * source is summed separately and the **largest** is taken: summing across
+ * sources triple-counted steps, turning ~7,000 real steps into ~20,000. Max is
+ * the right reducer because every source is trying to measure the same total,
+ * and the one that saw the most is the one that was actually worn or carried.
+ *
+ * `mode: "avg"` is for point-in-time measurements sampled repeatedly (resting
+ * HR, HRV, SpO2). Here the value from the source with the **most samples** wins,
+ * rather than averaging across devices of differing quality and coverage.
+ */
 export function bucketByDay(
   points: GoogleHealthDataPoint[],
   typeKey: string,
   valueField: string,
   mode: "sum" | "avg" = "sum"
 ) {
-  const sums = new Map<string, number>()
-  const counts = new Map<string, number>()
+  const byDay = new Map<string, Map<string, SourceAgg>>()
 
   for (const dp of points) {
     const payload = dp[typeKey] as Record<string, unknown> | undefined
@@ -221,12 +250,26 @@ export function bucketByDay(
     const value = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : null
     if (value == null || !Number.isFinite(value)) continue
 
-    sums.set(day, (sums.get(day) ?? 0) + value)
-    counts.set(day, (counts.get(day) ?? 0) + 1)
+    const sources = byDay.get(day) ?? new Map<string, SourceAgg>()
+    const agg = sources.get(sourceKey(dp)) ?? { sum: 0, count: 0 }
+    agg.sum += value
+    agg.count++
+    sources.set(sourceKey(dp), agg)
+    byDay.set(day, sources)
   }
 
-  if (mode === "sum") return sums
-  const avgs = new Map<string, number>()
-  for (const [day, sum] of sums) avgs.set(day, Math.round((sum / (counts.get(day) ?? 1)) * 10) / 10)
-  return avgs
+  const out = new Map<string, number>()
+  for (const [day, sources] of byDay) {
+    const perSource = [...sources.values()]
+    if (perSource.length === 0) continue
+
+    if (mode === "sum") {
+      out.set(day, Math.round(Math.max(...perSource.map((a) => a.sum))))
+    } else {
+      const dominant = perSource.reduce((best, a) => (a.count > best.count ? a : best))
+      out.set(day, Math.round((dominant.sum / dominant.count) * 10) / 10)
+    }
+  }
+
+  return out
 }

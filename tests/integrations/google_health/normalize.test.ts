@@ -185,4 +185,65 @@ describe("bucketByDay", () => {
     const byDay = bucketByDay(points, "heartRateVariability", "rootMeanSquareOfSuccessiveDifferencesMilliseconds", "avg")
     expect(byDay.get("2026-07-25")).toBe(75)
   })
+
+  // Confirmed live (2026-07-26): the Fitbit band, Fitbit MobileTrack and the
+  // Samsung phone via Health Connect all report the same walking. Summing
+  // across them turned ~9,700 real steps into 20,466.
+  it("takes the largest source rather than summing duplicate step sources", () => {
+    const day = { civilStartTime: { date: { year: 2026, month: 7, day: 23 } } }
+    const point = (platform: string, device: Record<string, unknown>, count: string) => ({
+      dataSource: { platform, device },
+      steps: { interval: day, count },
+    })
+
+    const byDay = bucketByDay(
+      [
+        point("FITBIT", {}, "5000"),
+        point("FITBIT", {}, "4719"),
+        point("FITBIT", { displayName: "MobileTrack" }, "5373"),
+        point("HEALTH_CONNECT", { formFactor: "PHONE", manufacturer: "samsung" }, "5374"),
+      ],
+      "steps",
+      "count",
+      "sum"
+    )
+
+    // FITBIT band: 5000 + 4719 = 9719, the largest single source.
+    expect(byDay.get("2026-07-23")).toBe(9719)
+  })
+
+  it("prefers the source with the most samples for averaged metrics", () => {
+    const date = { year: 2026, month: 7, day: 25 }
+    const point = (platform: string, value: number) => ({
+      dataSource: { platform, device: {} },
+      oxygenSaturation: { date, percentage: value },
+    })
+
+    const byDay = bucketByDay(
+      [
+        point("FITBIT", 96),
+        point("FITBIT", 97),
+        point("FITBIT", 98),
+        // A single stray reading from another platform must not drag the
+        // average down to 81.
+        point("HEALTH_CONNECT", 35),
+      ],
+      "oxygenSaturation",
+      "percentage",
+      "avg"
+    )
+
+    expect(byDay.get("2026-07-25")).toBe(97)
+  })
+
+  it("keeps a single-source day unchanged", () => {
+    const points = [
+      {
+        dataSource: { platform: "FITBIT", device: {} },
+        steps: { interval: { civilStartTime: { date: { year: 2026, month: 7, day: 25 } } }, count: "120" },
+      },
+    ]
+
+    expect(bucketByDay(points, "steps", "count", "sum").get("2026-07-25")).toBe(120)
+  })
 })
