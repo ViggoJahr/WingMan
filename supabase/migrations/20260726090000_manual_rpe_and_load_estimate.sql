@@ -56,7 +56,12 @@ $$;
 CREATE OR REPLACE FUNCTION public.assumed_rpe()
 RETURNS numeric LANGUAGE sql IMMUTABLE AS $$ SELECT 11::numeric $$;
 
-CREATE OR REPLACE VIEW public.daily_facts
+-- Dropped rather than replaced: CREATE OR REPLACE VIEW can only append columns
+-- to the end of the existing list, and this adds load_estimate and the coverage
+-- counts alongside total_load rather than after every unrelated column.
+DROP VIEW IF EXISTS public.daily_facts;
+
+CREATE VIEW public.daily_facts
 WITH (security_invoker = on)
 AS
 WITH span AS (
