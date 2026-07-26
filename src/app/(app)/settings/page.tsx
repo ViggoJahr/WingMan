@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { createClient } from "@/lib/supabase/server"
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -78,6 +79,15 @@ export default async function SettingsPage({
             >
               {googleHealth ? "Reconnect" : "Connect"} Google Health
             </a>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ThemeToggle />
           </CardContent>
         </Card>
       </div>

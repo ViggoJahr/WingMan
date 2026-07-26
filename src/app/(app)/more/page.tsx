@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { signOut } from "@/app/login/actions"
 
 const GROUPS = [
@@ -49,6 +50,14 @@ export default function MorePage() {
           </CardContent>
         </Card>
       ))}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Appearance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ThemeToggle />
+        </CardContent>
+      </Card>
       <form action={signOut}>
         <Button variant="outline" type="submit" className="w-full">
           Sign out
