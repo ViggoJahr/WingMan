@@ -1,7 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import { createClient } from "@/lib/supabase/server"
+import { ProfileForm } from "./ProfileForm"
+import { TuggConnectForm } from "./TuggConnectForm"
 
 const SOURCE_LABEL: Record<string, string> = {
   tugg: "TUGG",
@@ -16,11 +19,13 @@ export default async function SettingsPage({
   const { connected, error } = await searchParams
   const supabase = await createClient()
 
-  const { data: accounts } = await supabase
-    .from("integration_accounts")
-    .select("source, status, last_synced_at")
+  const [{ data: accounts }, { data: profile }] = await Promise.all([
+    supabase.from("integration_accounts").select("source, status, last_synced_at"),
+    supabase.from("users").select("height_cm, birth_date, gender").maybeSingle(),
+  ])
 
   const googleHealth = accounts?.find((a) => a.source === "google_health")
+  const tugg = accounts?.find((a) => a.source === "tugg")
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
@@ -78,6 +83,45 @@ export default async function SettingsPage({
             >
               {googleHealth ? "Reconnect" : "Connect"} Google Health
             </a>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>TUGG</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {tugg?.status === "error" && (
+              <p className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm text-status-critical">
+                TUGG&apos;s session has expired. Its refresh tokens rotate on every use and are shared
+                with the TUGG app itself, so signing in there can invalidate this one. Reconnect below.
+              </p>
+            )}
+            <TuggConnectForm isConnected={tugg != null} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProfileForm
+              defaultValues={{
+                height_cm: profile?.height_cm ?? null,
+                birth_date: profile?.birth_date ?? null,
+                gender: profile?.gender ?? null,
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ThemeToggle />
           </CardContent>
         </Card>
       </div>

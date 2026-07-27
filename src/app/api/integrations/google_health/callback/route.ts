@@ -45,7 +45,14 @@ export async function GET(request: NextRequest) {
     response.cookies.delete("google_health_oauth_state")
     return response
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    // Reflecting the raw exception into a query param rendered on /settings
+    // could leak internals from Google's token endpoint, so only the
+    // deliberately user-facing message is passed through; everything else
+    // becomes a generic code and is logged server-side instead.
+    console.error("[google_health] OAuth callback failed:", err)
+    const isMissingRefreshToken =
+      err instanceof Error && err.message.startsWith("Google did not return a refresh token")
+    const message = isMissingRefreshToken ? err.message : "google_health_exchange_failed"
     return NextResponse.redirect(
       new URL(`/settings?error=${encodeURIComponent(message)}`, request.url)
     )

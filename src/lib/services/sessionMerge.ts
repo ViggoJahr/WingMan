@@ -35,7 +35,17 @@ function richnessScore(s: CandidateSession, hasSets: boolean, hasHandballDetail:
 // primary, backfilled with any enrichment fields it's missing from the
 // other, and the other is marked merged_into rather than deleted so its
 // original source data stays available.
+// Only recent history is re-examined on each run. The comparison below is
+// O(n^2) and every .in() filter carries the full id list in the request URL,
+// so scanning the entire history after every sync would degrade forever.
+// Sources only ever write inside their own sync window (Google Health's is 30
+// days), so anything older has already been merged and cannot gain a new
+// counterpart.
+const MERGE_WINDOW_DAYS = 60
+
 export async function mergeOverlappingSessions(userId: string, db: SupabaseClient<Database>) {
+  const windowStart = new Date(Date.now() - MERGE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
   const { data: sessions, error } = await db
     .from("sessions")
     .select(
@@ -44,6 +54,7 @@ export async function mergeOverlappingSessions(userId: string, db: SupabaseClien
     .eq("user_id", userId)
     .is("merged_into", null)
     .not("end_time", "is", null)
+    .gte("start_time", windowStart)
     .order("start_time", { ascending: true })
 
   if (error) throw new Error(`Failed to load sessions for merge: ${error.message}`)

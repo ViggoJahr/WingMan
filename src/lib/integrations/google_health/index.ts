@@ -8,7 +8,6 @@ import {
   fetchBodyFat,
   fetchExercise,
   fetchHeartRateVariability,
-  fetchHeight,
   fetchOxygenSaturation,
   fetchRestingHeartRate,
   fetchSleep,
@@ -19,7 +18,6 @@ import {
   bucketByDay,
   normalizeBodyFat,
   normalizeExercise,
-  normalizeHeight,
   normalizeSleep,
   normalizeWeight,
 } from "./normalize"
@@ -55,7 +53,10 @@ async function sync(
     { label: "sleep", fetch: () => fetchSleep(tokens.accessToken, since) },
     { label: "weight", fetch: () => fetchWeight(tokens.accessToken, since) },
     { label: "bodyFat", fetch: () => fetchBodyFat(tokens.accessToken, since) },
-    { label: "height", fetch: () => fetchHeight(tokens.accessToken, since) },
+    // Height is deliberately not synced: it is recorded once and effectively
+    // never changes, so the source record always falls outside the sync window
+    // (0 of 24 body_metrics rows ever received one). It is a profile field
+    // entered in Settings instead - see users.height_cm.
     { label: "steps", fetch: () => fetchSteps(tokens.accessToken, since) },
     { label: "restingHeartRate", fetch: () => fetchRestingHeartRate(tokens.accessToken, since) },
     { label: "hrv", fetch: () => fetchHeartRateVariability(tokens.accessToken, since) },
@@ -89,7 +90,10 @@ async function sync(
     // A prior sync (before the exerciseType mapping fix) may have created a
     // subtype row that no longer matches this session's corrected type -
     // clear whichever ones don't apply before writing the current one.
-    if (sessionType !== "cardio") await db.from("cardio_sessions").delete().eq("session_id", sessionRow.id)
+    // general_cardio shares cardio_sessions: the focus/distance/avg-HR detail
+    // is still worth keeping for an unclassified activity.
+    const usesCardioDetail = sessionType === "cardio" || sessionType === "general_cardio"
+    if (!usesCardioDetail) await db.from("cardio_sessions").delete().eq("session_id", sessionRow.id)
     if (sessionType !== "strength_power")
       await db.from("strength_sessions").delete().eq("session_id", sessionRow.id)
     if (sessionType !== "handball") await db.from("handball_sessions").delete().eq("session_id", sessionRow.id)
@@ -140,13 +144,6 @@ async function sync(
     if (error) throw new Error(`Failed to upsert body fat: ${error.message}`)
     itemsSynced++
   }
-  for (const dp of results.height) {
-    const { error } = await db
-      .from("body_metrics")
-      .upsert(normalizeHeight(dp, userId), { onConflict: "user_id,date" })
-    if (error) throw new Error(`Failed to upsert height: ${error.message}`)
-    itemsSynced++
-  }
 
   const stepsByDay = bucketByDay(results.steps, "steps", "count", "sum")
   const restingHrByDay = bucketByDay(results.restingHeartRate, "dailyRestingHeartRate", "beatsPerMinute", "avg")
@@ -156,7 +153,18 @@ async function sync(
     "rootMeanSquareOfSuccessiveDifferencesMilliseconds",
     "avg"
   )
-  const spo2ByDay = bucketByDay(results.spo2, "oxygenSaturation", "percentage", "avg")
+  // Fitbit's SpO2 stream is noisy and emits a literal 50 as a "no valid
+  // reading" sentinel - 656 of 5015 readings (13%) sat at exactly 50.0, which
+  // dragged the daily mean to 86.9% against a median of 94%. Values below 70%
+  // are discarded as sensor error (they are not survivable while awake and
+  // walking around), the median is used instead of the mean so the remaining
+  // noise cannot move the result much, and a day needs a real sample count
+  // before it reports anything at all.
+  const spo2ByDay = bucketByDay(results.spo2, "oxygenSaturation", "percentage", "median", {
+    min: 70,
+    max: 100,
+    minSamples: 20,
+  })
   const azmByDay = bucketByDay(results.activeZoneMinutes, "activeZoneMinutes", "activeZoneMinutes", "sum")
 
   const days = new Set([

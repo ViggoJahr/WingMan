@@ -31,7 +31,8 @@ describe("normalizeExercise", () => {
     expect(session.start_time).toBe("2026-07-24T15:45:39Z")
     expect(session.end_time).toBe("2026-07-24T16:29:16Z")
     expect(session.external_id).toBe(dp.name)
-    expect(sessionType).toBe("cardio")
+    // WORKOUT is Google's catch-all, not a claim that this was cardio.
+    expect(sessionType).toBe("general_cardio")
     expect(cardioDetail.focus).toBe("Spinning")
     expect(cardioDetail.avg_hr).toBe(137)
   })
@@ -60,10 +61,21 @@ describe("normalizeExercise", () => {
     expect(sessionType).toBe("handball")
   })
 
-  it("falls back to cardio for other sports (e.g. basketball)", () => {
-    const dp = { exercise: { interval: { startTime: "2026-07-24T10:00:00Z" }, exerciseType: "BASKETBALL" } }
-    const { sessionType } = normalizeExercise(dp, USER_ID)
-    expect(sessionType).toBe("cardio")
+  it("maps recognised steady-state activities to cardio", () => {
+    for (const exerciseType of ["WALKING", "BIKING", "ROWING_MACHINE", "RUNNING"]) {
+      const dp = { exercise: { interval: { startTime: "2026-07-24T10:00:00Z" }, exerciseType } }
+      expect(normalizeExercise(dp, USER_ID).sessionType).toBe("cardio")
+    }
+  })
+
+  // Fitbit labelled a real strength session LACROSSE ("Träningspass") and sent
+  // powerlifting through as WORKOUT. Calling those "cardio" asserted something
+  // false about the training; general_cardio says "unclassified" instead.
+  it("maps unrecognised or generic labels to general_cardio", () => {
+    for (const exerciseType of ["BASKETBALL", "LACROSSE", "WORKOUT", "SOMETHING_NEW", undefined]) {
+      const dp = { exercise: { interval: { startTime: "2026-07-24T10:00:00Z" }, exerciseType } }
+      expect(normalizeExercise(dp, USER_ID).sessionType).toBe("general_cardio")
+    }
   })
 
   it("extracts calories, active duration, active zone minutes, and HR zones", () => {
@@ -184,5 +196,105 @@ describe("bucketByDay", () => {
     ]
     const byDay = bucketByDay(points, "heartRateVariability", "rootMeanSquareOfSuccessiveDifferencesMilliseconds", "avg")
     expect(byDay.get("2026-07-25")).toBe(75)
+  })
+
+  // Confirmed live (2026-07-26): the Fitbit band, Fitbit MobileTrack and the
+  // Samsung phone via Health Connect all report the same walking. Summing
+  // across them turned ~9,700 real steps into 20,466.
+  it("takes the largest source rather than summing duplicate step sources", () => {
+    const day = { civilStartTime: { date: { year: 2026, month: 7, day: 23 } } }
+    const point = (platform: string, device: Record<string, unknown>, count: string) => ({
+      dataSource: { platform, device },
+      steps: { interval: day, count },
+    })
+
+    const byDay = bucketByDay(
+      [
+        point("FITBIT", {}, "5000"),
+        point("FITBIT", {}, "4719"),
+        point("FITBIT", { displayName: "MobileTrack" }, "5373"),
+        point("HEALTH_CONNECT", { formFactor: "PHONE", manufacturer: "samsung" }, "5374"),
+      ],
+      "steps",
+      "count",
+      "sum"
+    )
+
+    // FITBIT band: 5000 + 4719 = 9719, the largest single source.
+    expect(byDay.get("2026-07-23")).toBe(9719)
+  })
+
+  it("prefers the source with the most samples for averaged metrics", () => {
+    const date = { year: 2026, month: 7, day: 25 }
+    const point = (platform: string, value: number) => ({
+      dataSource: { platform, device: {} },
+      oxygenSaturation: { date, percentage: value },
+    })
+
+    const byDay = bucketByDay(
+      [
+        point("FITBIT", 96),
+        point("FITBIT", 97),
+        point("FITBIT", 98),
+        // A single stray reading from another platform must not drag the
+        // average down to 81.
+        point("HEALTH_CONNECT", 35),
+      ],
+      "oxygenSaturation",
+      "percentage",
+      "avg"
+    )
+
+    expect(byDay.get("2026-07-25")).toBe(97)
+  })
+
+  // Confirmed live: 656 of 5015 SpO2 readings sat at exactly 50.0 - a
+  // sentinel, not a measurement - pulling the daily mean to 86.9% against a
+  // median of 94%.
+  it("discards out-of-range sensor errors and uses the median", () => {
+    const date = { year: 2026, month: 7, day: 23 }
+    const reading = (v: number) => ({
+      dataSource: { platform: "FITBIT", device: {} },
+      oxygenSaturation: { date, percentage: v },
+    })
+
+    const points = [
+      ...Array.from({ length: 10 }, () => reading(50)), // sentinels
+      ...Array.from({ length: 21 }, () => reading(97)),
+    ]
+
+    const byDay = bucketByDay(points, "oxygenSaturation", "percentage", "median", {
+      min: 70,
+      max: 100,
+      minSamples: 20,
+    })
+
+    expect(byDay.get("2026-07-23")).toBe(97)
+  })
+
+  it("reports nothing for a day with too few valid readings", () => {
+    const date = { year: 2026, month: 7, day: 17 }
+    const points = [
+      { dataSource: { platform: "FITBIT", device: {} }, oxygenSaturation: { date, percentage: 50 } },
+      { dataSource: { platform: "FITBIT", device: {} }, oxygenSaturation: { date, percentage: 99 } },
+    ]
+
+    const byDay = bucketByDay(points, "oxygenSaturation", "percentage", "median", {
+      min: 70,
+      minSamples: 20,
+    })
+
+    expect(byDay.has("2026-07-17")).toBe(false)
+  })
+
+  it("keeps a single-source day unchanged", () => {
+    const points = [
+      {
+        dataSource: { platform: "FITBIT", device: {} },
+        steps: { interval: { civilStartTime: { date: { year: 2026, month: 7, day: 25 } } }, count: "120" },
+      },
+    ]
+
+    expect(bucketByDay(points, "steps", "count", "sum").get("2026-07-25")).toBe(120)
   })
 })

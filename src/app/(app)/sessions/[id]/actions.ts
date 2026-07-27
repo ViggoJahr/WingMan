@@ -1,6 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
+import { revalidatePath } from "next/cache"
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { decrypt } from "@/lib/crypto"
 import { refreshAccessToken } from "@/lib/integrations/google_health/auth"
@@ -31,6 +32,37 @@ export async function getHeartRateTimeline(
   const windowSizeSeconds = Math.max(30, Math.round(durationSeconds / 80))
 
   return fetchHeartRateRollup(tokens.accessToken, startTime, endTime, windowSizeSeconds)
+}
+
+/**
+ * Sets (or clears) a user-supplied RPE on any session, including synced ones.
+ *
+ * This writes manual_rpe rather than rpe precisely so it survives the next
+ * sync: adapters own `rpe` and would overwrite it, but nothing in the sync path
+ * touches manual_rpe. Most sessions arrive without any RPE at all - TUGG's gym
+ * workouts carry no such field - and without one they contribute no measured
+ * training load, so this is the main way to make the load metrics trustworthy.
+ */
+export async function setManualRpe(sessionId: string, rpe: number | null) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect("/login")
+
+  if (rpe != null && (!Number.isInteger(rpe) || rpe < 1 || rpe > 20)) {
+    throw new Error("RPE must be a whole number between 1 and 20.")
+  }
+
+  // RLS scopes this to the caller's own sessions.
+  const { error } = await supabase
+    .from("sessions")
+    .update({ manual_rpe: rpe })
+    .eq("id", sessionId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath("/")
+  revalidatePath(`/sessions/${sessionId}`)
 }
 
 // Deletes any manually-created session (practice/match/workout) - subtype

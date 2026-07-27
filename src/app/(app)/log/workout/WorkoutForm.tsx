@@ -1,6 +1,10 @@
-import { Button } from "@/components/ui/button"
+"use client"
+
+import { useActionState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Field, FieldError, FormAlert, SubmitButton, fieldValue } from "@/components/forms/FormParts"
+import { idleState } from "@/lib/validation/formState"
 import { logWorkout, updateWorkout } from "./actions"
 
 function nowLocalDatetime() {
@@ -36,16 +40,21 @@ export function WorkoutForm({
   defaultValues?: WorkoutDefaults
 }) {
   const action = mode === "edit" ? updateWorkout.bind(null, sessionId!) : logWorkout
+  const [state, formAction] = useActionState(action, idleState)
+  const v = (name: string, fallback: string | number | null | undefined) =>
+    fieldValue(state, name, fallback)
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4">
+      <FormAlert state={state} />
+
       <div className="flex flex-col gap-2">
         <Label htmlFor="type">Type</Label>
         {mode === "edit" ? (
           <>
             <p className="text-sm text-muted-foreground">
-              {TYPE_LABEL[defaultValues!.type] ?? defaultValues!.type} (can&apos;t be changed - delete and
-              re-log to change type)
+              {TYPE_LABEL[defaultValues!.type] ?? defaultValues!.type} (can&apos;t be changed - delete
+              and re-log to change type)
             </p>
             <input type="hidden" name="type" value={defaultValues!.type} />
           </>
@@ -54,7 +63,7 @@ export function WorkoutForm({
             id="type"
             name="type"
             className="h-9 rounded-md border bg-background px-3 text-sm"
-            defaultValue="cardio"
+            defaultValue={v("type", "cardio")}
           >
             <option value="cardio">Cardio / sport</option>
             <option value="strength_power">Strength</option>
@@ -62,60 +71,74 @@ export function WorkoutForm({
             <option value="active_rest">Active rest</option>
           </select>
         )}
+        <FieldError errors={state.fieldErrors?.type} />
       </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="focus">Sport / focus</Label>
+
+      <Field name="focus" label="Sport / focus" state={state}>
         <Input
           id="focus"
           name="focus"
           type="text"
           placeholder="e.g. Basketball, Running, Yoga"
-          defaultValue={defaultValues?.focus ?? ""}
+          defaultValue={v("focus", defaultValues?.focus)}
         />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="start_time">Start time</Label>
+      </Field>
+
+      <Field name="start_time" label="Start time" state={state}>
         <Input
           id="start_time"
           name="start_time"
           type="datetime-local"
-          defaultValue={defaultValues?.start_time ?? nowLocalDatetime()}
+          defaultValue={v("start_time", defaultValues?.start_time ?? nowLocalDatetime())}
           required
         />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="duration_minutes">Duration (minutes)</Label>
+      </Field>
+
+      <Field name="duration_minutes" label="Duration (minutes)" state={state}>
         <Input
           id="duration_minutes"
           name="duration_minutes"
           type="number"
           min={1}
-          defaultValue={defaultValues?.duration_minutes ?? 45}
+          defaultValue={v("duration_minutes", defaultValues?.duration_minutes ?? 45)}
           required
         />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="distance_km">Distance (km, optional)</Label>
+      </Field>
+
+      <Field name="distance_km" label="Distance (km, optional)" state={state}>
         <Input
           id="distance_km"
           name="distance_km"
           type="number"
           step="0.01"
           min={0}
-          defaultValue={defaultValues?.distance_km ?? ""}
+          defaultValue={v("distance_km", defaultValues?.distance_km)}
         />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="rpe">RPE (1-20)</Label>
-        <Input id="rpe" name="rpe" type="number" min={1} max={20} defaultValue={defaultValues?.rpe ?? ""} />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="location">Location</Label>
-        <Input id="location" name="location" type="text" defaultValue={defaultValues?.location ?? ""} />
-      </div>
-      <Button type="submit" className="mt-2">
+      </Field>
+
+      <Field name="rpe" label="RPE (1-20)" state={state}>
+        <Input
+          id="rpe"
+          name="rpe"
+          type="number"
+          min={1}
+          max={20}
+          defaultValue={v("rpe", defaultValues?.rpe)}
+        />
+      </Field>
+
+      <Field name="location" label="Location" state={state}>
+        <Input
+          id="location"
+          name="location"
+          type="text"
+          defaultValue={v("location", defaultValues?.location)}
+        />
+      </Field>
+
+      <SubmitButton className="mt-2">
         {mode === "edit" ? "Save changes" : "Save workout"}
-      </Button>
+      </SubmitButton>
     </form>
   )
 }

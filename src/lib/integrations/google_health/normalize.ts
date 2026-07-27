@@ -34,24 +34,52 @@ function civilDate(date: { year: number; month: number; day: number }): string {
   return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`
 }
 
-type SessionType = "strength_power" | "cardio" | "mobility_rehab" | "active_rest" | "handball"
+type SessionType =
+  | "strength_power"
+  | "cardio"
+  | "general_cardio"
+  | "mobility_rehab"
+  | "active_rest"
+  | "handball"
 
-// Confirmed live (2026-07-25) across 17 real synced sessions: exerciseType
-// is a real enum (STRENGTH_TRAINING, BIKING, WALKING, ROWING_MACHINE,
-// WORKOUT, HANDBALL, BASKETBALL, ...), previously hardcoded to "cardio"
-// for everything, which mis-bucketed strength sessions and lost the
-// auto-detected handball activity entirely. Other ball/team sports without
-// their own session_type slot fall back to "cardio" - the specific
-// activity name is still preserved via cardioDetail.focus (displayName).
+// Exercise types that genuinely are steady-state cardio. Anything outside this
+// list - and outside the explicit cases below - is auto-detection we don't
+// trust, so it becomes general_cardio rather than being asserted as cardio.
+const CARDIO_TYPES = new Set([
+  "WALKING",
+  "RUNNING",
+  "BIKING",
+  "MOUNTAIN_BIKING",
+  "ROWING",
+  "ROWING_MACHINE",
+  "SWIMMING",
+  "SWIMMING_POOL",
+  "SWIMMING_OPEN_WATER",
+  "ELLIPTICAL",
+  "STAIR_CLIMBING",
+  "HIKING",
+  "SKIING",
+  "SNOWBOARDING",
+  "SKATING",
+  "ROLLER_SKATING",
+])
+
+/**
+ * Confirmed live across real synced sessions: exerciseType is a genuine enum
+ * (STRENGTH_TRAINING, BIKING, WALKING, ROWING_MACHINE, WORKOUT, HANDBALL,
+ * BASKETBALL, LACROSSE, ...) but the auto-detection is often wrong. A real
+ * strength session was labelled LACROSSE with displayName "Träningspass", and
+ * "Styrkelyftning" (powerlifting) arrived as the generic WORKOUT.
+ *
+ * Mapping everything unrecognised to "cardio" asserted something false. Unknown
+ * labels now become "general_cardio" - an explicit "unclassified" bucket. The
+ * source's own label survives in cardioDetail.focus either way.
+ */
 function mapExerciseType(exerciseType: string | undefined): SessionType {
-  switch (exerciseType) {
-    case "STRENGTH_TRAINING":
-      return "strength_power"
-    case "HANDBALL":
-      return "handball"
-    default:
-      return "cardio"
-  }
+  if (exerciseType === "STRENGTH_TRAINING") return "strength_power"
+  if (exerciseType === "HANDBALL") return "handball"
+  if (exerciseType && CARDIO_TYPES.has(exerciseType)) return "cardio"
+  return "general_cardio"
 }
 
 interface ExerciseShape {
@@ -195,18 +223,63 @@ export function normalizeHeight(dp: GoogleHealthDataPoint, userId: string) {
   }
 }
 
-// Buckets a numeric field to local calendar day. `mode: "sum"` for
-// cumulative counts (steps, active zone minutes), `mode: "avg"` for
-// point-in-time measurements sampled repeatedly through the day
-// (resting HR, HRV, SpO2).
+/**
+ * Identifies the device/platform that recorded a data point.
+ *
+ * Confirmed live (2026-07-26): the same physical steps arrive from up to three
+ * sources at once - the Fitbit band, Fitbit's phone-based "MobileTrack", and
+ * the Samsung phone via Health Connect. They are duplicate measurements of one
+ * reality, not separate activity.
+ */
+function sourceKey(dp: GoogleHealthDataPoint): string {
+  const source = (dp.dataSource ?? {}) as { platform?: string; device?: Record<string, unknown> }
+  const device =
+    source.device && Object.keys(source.device).length > 0 ? JSON.stringify(source.device) : ""
+  return `${source.platform ?? "unknown"}|${device}`
+}
+
+interface SourceAgg {
+  sum: number
+  count: number
+  values: number[]
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+/**
+ * Buckets a numeric field to local calendar day, resolving multiple recording
+ * sources rather than conflating them.
+ *
+ * `mode: "sum"` is for cumulative counts (steps, active zone minutes). Each
+ * source is summed separately and the **largest** is taken: summing across
+ * sources triple-counted steps, turning ~7,000 real steps into ~20,000. Max is
+ * the right reducer because every source is trying to measure the same total,
+ * and the one that saw the most is the one that was actually worn or carried.
+ *
+ * `mode: "avg"` is for point-in-time measurements sampled repeatedly (resting
+ * HR, HRV, SpO2). Here the value from the source with the **most samples** wins,
+ * rather than averaging across devices of differing quality and coverage.
+ */
+export interface BucketOptions {
+  /** Readings outside [min, max] are discarded as sensor error before aggregating. */
+  min?: number
+  max?: number
+  /** Days with fewer surviving readings than this produce no value at all. */
+  minSamples?: number
+}
+
 export function bucketByDay(
   points: GoogleHealthDataPoint[],
   typeKey: string,
   valueField: string,
-  mode: "sum" | "avg" = "sum"
+  mode: "sum" | "avg" | "median" = "sum",
+  options: BucketOptions = {}
 ) {
-  const sums = new Map<string, number>()
-  const counts = new Map<string, number>()
+  const byDay = new Map<string, Map<string, SourceAgg>>()
 
   for (const dp of points) {
     const payload = dp[typeKey] as Record<string, unknown> | undefined
@@ -220,13 +293,34 @@ export function bucketByDay(
     const raw = payload[valueField]
     const value = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : null
     if (value == null || !Number.isFinite(value)) continue
+    if (options.min != null && value < options.min) continue
+    if (options.max != null && value > options.max) continue
 
-    sums.set(day, (sums.get(day) ?? 0) + value)
-    counts.set(day, (counts.get(day) ?? 0) + 1)
+    const sources = byDay.get(day) ?? new Map<string, SourceAgg>()
+    const agg = sources.get(sourceKey(dp)) ?? { sum: 0, count: 0, values: [] }
+    agg.sum += value
+    agg.count++
+    if (mode === "median") agg.values.push(value)
+    sources.set(sourceKey(dp), agg)
+    byDay.set(day, sources)
   }
 
-  if (mode === "sum") return sums
-  const avgs = new Map<string, number>()
-  for (const [day, sum] of sums) avgs.set(day, Math.round((sum / (counts.get(day) ?? 1)) * 10) / 10)
-  return avgs
+  const out = new Map<string, number>()
+  for (const [day, sources] of byDay) {
+    const perSource = [...sources.values()]
+    if (perSource.length === 0) continue
+
+    if (mode === "sum") {
+      out.set(day, Math.round(Math.max(...perSource.map((a) => a.sum))))
+      continue
+    }
+
+    const dominant = perSource.reduce((best, a) => (a.count > best.count ? a : best))
+    if (options.minSamples != null && dominant.count < options.minSamples) continue
+
+    const value = mode === "median" ? median(dominant.values) : dominant.sum / dominant.count
+    out.set(day, Math.round(value * 10) / 10)
+  }
+
+  return out
 }

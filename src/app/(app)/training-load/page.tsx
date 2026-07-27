@@ -2,24 +2,24 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/server"
 import { aggregateWeeklyLoad } from "@/lib/services/trainingLoad"
+import { isoDaysAgo, timestampDaysAgo } from "@/lib/dates"
 import { TrainingLoadChart } from "./chart"
 import { ReadinessChart } from "../readiness/chart"
 
 export default async function TrainingLoadPage() {
   const supabase = await createClient()
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
 
   const { data: sessions } = await supabase
     .from("sessions")
     .select("start_time, end_time, rpe")
     .is("merged_into", null)
-    .gte("start_time", ninetyDaysAgo.toISOString())
+    .gte("start_time", timestampDaysAgo(90))
     .order("start_time", { ascending: true })
 
   const { data: readinessEntries } = await supabase
     .from("readiness")
     .select("date, total_score")
-    .gte("date", ninetyDaysAgo.toISOString().slice(0, 10))
+    .gte("date", isoDaysAgo(90))
     .order("date", { ascending: true })
 
   const weeklyLoad = aggregateWeeklyLoad(sessions ?? [])

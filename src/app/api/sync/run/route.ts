@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server"
 import { runSync } from "@/lib/services/syncOrchestrator"
 
+// The adapters write serially across many tables; the platform default (10s on
+// Hobby) is not enough headroom as history grows. 300 is the Hobby ceiling.
+export const maxDuration = 300
+
 async function runAndRespond(accountId?: string) {
   try {
     const results = await runSync(accountId)
     return NextResponse.json({ results })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    console.error("[sync] run failed:", err)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

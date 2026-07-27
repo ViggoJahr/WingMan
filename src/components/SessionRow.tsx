@@ -3,6 +3,7 @@ import Link from "next/link"
 export const SESSION_TYPE_LABEL: Record<string, string> = {
   strength_power: "Strength",
   cardio: "Cardio",
+  general_cardio: "Other activity",
   mobility_rehab: "Mobility/Rehab",
   active_rest: "Active rest",
   handball: "Handball",

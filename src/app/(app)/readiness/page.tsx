@@ -3,18 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
+import { isoDaysAgo } from "@/lib/dates"
 import { ReadinessChart } from "./chart"
 
 export default async function ReadinessTrendPage() {
   const supabase = await createClient()
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10)
 
   const { data: entries } = await supabase
     .from("readiness")
     .select("date, total_score")
-    .gte("date", ninetyDaysAgo)
+    .gte("date", isoDaysAgo(90))
     .order("date", { ascending: true })
 
   const points = (entries ?? []).map((e) => ({ date: e.date, total_score: e.total_score ?? 0 }))
