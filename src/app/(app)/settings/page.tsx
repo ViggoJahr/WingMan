@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { createClient } from "@/lib/supabase/server"
 import { ProfileForm } from "./ProfileForm"
+import { TuggConnectForm } from "./TuggConnectForm"
 
 const SOURCE_LABEL: Record<string, string> = {
   tugg: "TUGG",
@@ -24,6 +25,7 @@ export default async function SettingsPage({
   ])
 
   const googleHealth = accounts?.find((a) => a.source === "google_health")
+  const tugg = accounts?.find((a) => a.source === "tugg")
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
@@ -81,6 +83,21 @@ export default async function SettingsPage({
             >
               {googleHealth ? "Reconnect" : "Connect"} Google Health
             </a>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>TUGG</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {tugg?.status === "error" && (
+              <p className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm text-status-critical">
+                TUGG&apos;s session has expired. Its refresh tokens rotate on every use and are shared
+                with the TUGG app itself, so signing in there can invalidate this one. Reconnect below.
+              </p>
+            )}
+            <TuggConnectForm isConnected={tugg != null} />
           </CardContent>
         </Card>
 
