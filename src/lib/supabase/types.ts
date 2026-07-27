@@ -270,27 +270,36 @@ export type Database = {
       handball_sessions: {
         Row: {
           comments: string | null
+          contact_load: number | null
           defense_vs_attack_ratio: string | null
+          jump_load: number | null
           perceived_challenge: number | null
           perceived_performance: number | null
+          position: string | null
           session_id: string
           subtype: Database["public"]["Enums"]["handball_subtype"]
           throws_count: number | null
         }
         Insert: {
           comments?: string | null
+          contact_load?: number | null
           defense_vs_attack_ratio?: string | null
+          jump_load?: number | null
           perceived_challenge?: number | null
           perceived_performance?: number | null
+          position?: string | null
           session_id: string
           subtype: Database["public"]["Enums"]["handball_subtype"]
           throws_count?: number | null
         }
         Update: {
           comments?: string | null
+          contact_load?: number | null
           defense_vs_attack_ratio?: string | null
+          jump_load?: number | null
           perceived_challenge?: number | null
           perceived_performance?: number | null
+          position?: string | null
           session_id?: string
           subtype?: Database["public"]["Enums"]["handball_subtype"]
           throws_count?: number | null

@@ -6,6 +6,12 @@ import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
+import {
+  POSITION_LABELS,
+  loadBandLabel,
+  throwBandLabel,
+  type HandballPosition,
+} from "@/lib/handball/vocab"
 import { HeartRateChart } from "./HeartRateChart"
 import { deleteSession } from "./actions"
 
@@ -296,6 +302,49 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   </div>
                 </dl>
               )}
+
+              {/* Tissue-specific dose lives on handball_sessions, so it shows for
+                  matches and practices alike. Hidden entirely when nothing was
+                  logged, which is every session predating the band fields. */}
+              {handball &&
+                (handball.position != null ||
+                  handball.throws_count != null ||
+                  handball.jump_load != null ||
+                  handball.contact_load != null ||
+                  handball.perceived_performance != null) && (
+                  <dl className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 sm:grid-cols-5">
+                    <div>
+                      <dt className="text-muted-foreground">Position</dt>
+                      <dd className="font-medium">
+                        {handball.position
+                          ? (POSITION_LABELS[handball.position as HandballPosition] ??
+                            handball.position)
+                          : "-"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Throws</dt>
+                      <dd className="font-medium">{throwBandLabel(handball.throws_count) ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Jumping</dt>
+                      <dd className="font-medium">{loadBandLabel(handball.jump_load) ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Contact</dt>
+                      <dd className="font-medium">{loadBandLabel(handball.contact_load) ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">How it went</dt>
+                      <dd className="font-medium">
+                        {handball.perceived_performance != null
+                          ? `${handball.perceived_performance}/10`
+                          : "-"}
+                      </dd>
+                    </div>
+                  </dl>
+                )}
+
               {handball?.comments && <p className="mt-2 text-muted-foreground">{handball.comments}</p>}
             </CardContent>
           </Card>

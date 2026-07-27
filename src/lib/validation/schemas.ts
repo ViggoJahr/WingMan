@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { HANDBALL_POSITIONS } from "@/lib/handball/vocab"
 
 // FormData only ever yields strings, and an untouched optional input arrives
 // as "". Before these schemas existed the actions did `Number(formData.get(x))`
@@ -57,12 +58,23 @@ const sessionCore = {
   location: optionalText,
 }
 
+/** Position is a controlled vocabulary; the CHECK on handball_sessions matches. */
+const handballPosition = z.preprocess(emptyToNull, z.enum(HANDBALL_POSITIONS).nullable())
+
 export const practiceSchema = z.object({
   ...sessionCore,
   practice_focus: optionalText,
   defense_vs_attack_ratio: optionalText,
   tactical_complexity: optionalInt(1, 10),
   comments: optionalText,
+  // Tissue-specific dose. The form writes band midpoints for throws (0/15/55/110)
+  // and 0-3 bands for the other two; 400 is a generous ceiling for a hand-edited
+  // throws value rather than a real training limit.
+  throws_count: optionalInt(0, 400),
+  jump_load: optionalInt(0, 3),
+  contact_load: optionalInt(0, 3),
+  position: handballPosition,
+  perceived_performance: optionalInt(1, 10),
 })
 
 export const WORKOUT_TYPES = ["cardio", "strength_power", "mobility_rehab", "active_rest"] as const

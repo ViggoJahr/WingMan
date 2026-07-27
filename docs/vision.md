@@ -381,7 +381,7 @@ relevant page is next touched:
 | `injuries` (whole table) | Never read or written by any screen |
 | `body_metrics.body_fat_percentage`, `height_cm` | Synced from Google Health, never charted |
 | `sleep_logs.sleep_stages` | Stored as jsonb; only total hours shown |
-| `handball_sessions.throws_count` | Column exists, no form or view |
+| `handball_sessions.throws_count` | Written by the practice form as a band midpoint; shown on session detail, not yet trended |
 | 9 of 16 match stats | Enterable and shown per-session, never trended |
 | `strength_test_results.verification_status` | Stored, not selected by `/tests` |
 | `sessions.surface` | Displayed on session detail; no form writes it |

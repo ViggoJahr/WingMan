@@ -38,7 +38,9 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
   if (session.type === "handball") {
     const { data: handball } = await supabase
       .from("handball_sessions")
-      .select("subtype, defense_vs_attack_ratio, comments, perceived_performance, perceived_challenge")
+      .select(
+        "subtype, defense_vs_attack_ratio, comments, perceived_performance, perceived_challenge, throws_count, jump_load, contact_load, position"
+      )
       .eq("session_id", id)
       .maybeSingle()
 
@@ -98,6 +100,11 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
             defense_vs_attack_ratio: handball?.defense_vs_attack_ratio ?? null,
             tactical_complexity: practice.tactical_complexity,
             comments: handball?.comments ?? null,
+            throws_count: handball?.throws_count ?? null,
+            jump_load: handball?.jump_load ?? null,
+            contact_load: handball?.contact_load ?? null,
+            position: handball?.position ?? null,
+            perceived_performance: handball?.perceived_performance ?? null,
           }}
         />
       )

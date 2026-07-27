@@ -35,6 +35,11 @@ export async function logPractice(_prev: ActionState, formData: FormData): Promi
     subtype: "team_practice",
     defense_vs_attack_ratio: input.defense_vs_attack_ratio,
     comments: input.comments,
+    throws_count: input.throws_count,
+    jump_load: input.jump_load,
+    contact_load: input.contact_load,
+    position: input.position,
+    perceived_performance: input.perceived_performance,
   })
   if (handballErr) return failure(handballErr.message, formData)
 
@@ -92,6 +97,11 @@ export async function updatePractice(
     .update({
       defense_vs_attack_ratio: input.defense_vs_attack_ratio,
       comments: input.comments,
+      throws_count: input.throws_count,
+      jump_load: input.jump_load,
+      contact_load: input.contact_load,
+      position: input.position,
+      perceived_performance: input.perceived_performance,
     })
     .eq("session_id", sessionId)
   if (handballErr) return failure(handballErr.message, formData)
