@@ -6,14 +6,21 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import type { ActionState } from "@/lib/validation/formState"
 
-/** Banner for whole-form failures and the "fix the highlighted fields" summary. */
+/** Banner for whole-form failures, the "fix the highlighted fields" summary, and confirmations. */
 export function FormAlert({ state }: { state: ActionState }) {
-  if (state.status !== "error" || !state.message) return null
+  if (!state.message || state.status === "idle") return null
+
+  const isError = state.status === "error"
 
   return (
     <p
-      role="alert"
-      className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm text-status-critical"
+      role={isError ? "alert" : "status"}
+      className={cn(
+        "rounded-md border p-3 text-sm",
+        isError
+          ? "border-status-critical/50 bg-status-critical/10 text-status-critical"
+          : "border-status-good/50 bg-status-good/10 text-status-good"
+      )}
     >
       {state.message}
     </p>

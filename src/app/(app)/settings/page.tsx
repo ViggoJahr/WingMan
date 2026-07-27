@@ -3,6 +3,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { createClient } from "@/lib/supabase/server"
+import { ProfileForm } from "./ProfileForm"
 
 const SOURCE_LABEL: Record<string, string> = {
   tugg: "TUGG",
@@ -17,9 +18,10 @@ export default async function SettingsPage({
   const { connected, error } = await searchParams
   const supabase = await createClient()
 
-  const { data: accounts } = await supabase
-    .from("integration_accounts")
-    .select("source, status, last_synced_at")
+  const [{ data: accounts }, { data: profile }] = await Promise.all([
+    supabase.from("integration_accounts").select("source, status, last_synced_at"),
+    supabase.from("users").select("height_cm, birth_date, gender").maybeSingle(),
+  ])
 
   const googleHealth = accounts?.find((a) => a.source === "google_health")
 
@@ -79,6 +81,21 @@ export default async function SettingsPage({
             >
               {googleHealth ? "Reconnect" : "Connect"} Google Health
             </a>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ProfileForm
+              defaultValues={{
+                height_cm: profile?.height_cm ?? null,
+                birth_date: profile?.birth_date ?? null,
+                gender: profile?.gender ?? null,
+              }}
+            />
           </CardContent>
         </Card>
 

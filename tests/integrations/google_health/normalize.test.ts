@@ -31,7 +31,8 @@ describe("normalizeExercise", () => {
     expect(session.start_time).toBe("2026-07-24T15:45:39Z")
     expect(session.end_time).toBe("2026-07-24T16:29:16Z")
     expect(session.external_id).toBe(dp.name)
-    expect(sessionType).toBe("cardio")
+    // WORKOUT is Google's catch-all, not a claim that this was cardio.
+    expect(sessionType).toBe("general_cardio")
     expect(cardioDetail.focus).toBe("Spinning")
     expect(cardioDetail.avg_hr).toBe(137)
   })
@@ -60,10 +61,21 @@ describe("normalizeExercise", () => {
     expect(sessionType).toBe("handball")
   })
 
-  it("falls back to cardio for other sports (e.g. basketball)", () => {
-    const dp = { exercise: { interval: { startTime: "2026-07-24T10:00:00Z" }, exerciseType: "BASKETBALL" } }
-    const { sessionType } = normalizeExercise(dp, USER_ID)
-    expect(sessionType).toBe("cardio")
+  it("maps recognised steady-state activities to cardio", () => {
+    for (const exerciseType of ["WALKING", "BIKING", "ROWING_MACHINE", "RUNNING"]) {
+      const dp = { exercise: { interval: { startTime: "2026-07-24T10:00:00Z" }, exerciseType } }
+      expect(normalizeExercise(dp, USER_ID).sessionType).toBe("cardio")
+    }
+  })
+
+  // Fitbit labelled a real strength session LACROSSE ("Träningspass") and sent
+  // powerlifting through as WORKOUT. Calling those "cardio" asserted something
+  // false about the training; general_cardio says "unclassified" instead.
+  it("maps unrecognised or generic labels to general_cardio", () => {
+    for (const exerciseType of ["BASKETBALL", "LACROSSE", "WORKOUT", "SOMETHING_NEW", undefined]) {
+      const dp = { exercise: { interval: { startTime: "2026-07-24T10:00:00Z" }, exerciseType } }
+      expect(normalizeExercise(dp, USER_ID).sessionType).toBe("general_cardio")
+    }
   })
 
   it("extracts calories, active duration, active zone minutes, and HR zones", () => {

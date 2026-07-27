@@ -9,7 +9,8 @@ import type { ZodError } from "zod"
  * when actions simply threw.
  */
 export interface ActionState {
-  status: "idle" | "error"
+  /** "success" is for actions that stay on the page; ones that redirect never return. */
+  status: "idle" | "error" | "success"
   message?: string
   fieldErrors?: Record<string, string[]>
   values?: Record<string, string>

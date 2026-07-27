@@ -5,7 +5,14 @@ import { createClient } from "@/lib/supabase/server"
 
 const PAGE_SIZE = 30
 
-const SESSION_TYPES = ["strength_power", "cardio", "mobility_rehab", "active_rest", "handball"] as const
+const SESSION_TYPES = [
+  "strength_power",
+  "cardio",
+  "general_cardio",
+  "mobility_rehab",
+  "active_rest",
+  "handball",
+] as const
 
 interface Filters {
   type?: string

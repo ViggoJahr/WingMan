@@ -34,24 +34,52 @@ function civilDate(date: { year: number; month: number; day: number }): string {
   return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`
 }
 
-type SessionType = "strength_power" | "cardio" | "mobility_rehab" | "active_rest" | "handball"
+type SessionType =
+  | "strength_power"
+  | "cardio"
+  | "general_cardio"
+  | "mobility_rehab"
+  | "active_rest"
+  | "handball"
 
-// Confirmed live (2026-07-25) across 17 real synced sessions: exerciseType
-// is a real enum (STRENGTH_TRAINING, BIKING, WALKING, ROWING_MACHINE,
-// WORKOUT, HANDBALL, BASKETBALL, ...), previously hardcoded to "cardio"
-// for everything, which mis-bucketed strength sessions and lost the
-// auto-detected handball activity entirely. Other ball/team sports without
-// their own session_type slot fall back to "cardio" - the specific
-// activity name is still preserved via cardioDetail.focus (displayName).
+// Exercise types that genuinely are steady-state cardio. Anything outside this
+// list - and outside the explicit cases below - is auto-detection we don't
+// trust, so it becomes general_cardio rather than being asserted as cardio.
+const CARDIO_TYPES = new Set([
+  "WALKING",
+  "RUNNING",
+  "BIKING",
+  "MOUNTAIN_BIKING",
+  "ROWING",
+  "ROWING_MACHINE",
+  "SWIMMING",
+  "SWIMMING_POOL",
+  "SWIMMING_OPEN_WATER",
+  "ELLIPTICAL",
+  "STAIR_CLIMBING",
+  "HIKING",
+  "SKIING",
+  "SNOWBOARDING",
+  "SKATING",
+  "ROLLER_SKATING",
+])
+
+/**
+ * Confirmed live across real synced sessions: exerciseType is a genuine enum
+ * (STRENGTH_TRAINING, BIKING, WALKING, ROWING_MACHINE, WORKOUT, HANDBALL,
+ * BASKETBALL, LACROSSE, ...) but the auto-detection is often wrong. A real
+ * strength session was labelled LACROSSE with displayName "Träningspass", and
+ * "Styrkelyftning" (powerlifting) arrived as the generic WORKOUT.
+ *
+ * Mapping everything unrecognised to "cardio" asserted something false. Unknown
+ * labels now become "general_cardio" - an explicit "unclassified" bucket. The
+ * source's own label survives in cardioDetail.focus either way.
+ */
 function mapExerciseType(exerciseType: string | undefined): SessionType {
-  switch (exerciseType) {
-    case "STRENGTH_TRAINING":
-      return "strength_power"
-    case "HANDBALL":
-      return "handball"
-    default:
-      return "cardio"
-  }
+  if (exerciseType === "STRENGTH_TRAINING") return "strength_power"
+  if (exerciseType === "HANDBALL") return "handball"
+  if (exerciseType && CARDIO_TYPES.has(exerciseType)) return "cardio"
+  return "general_cardio"
 }
 
 interface ExerciseShape {

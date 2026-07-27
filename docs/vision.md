@@ -388,3 +388,9 @@ relevant page is next touched:
 | `active_rest.focus` | Written by the workout form; session detail never reads it |
 | `raw_payload` (5 tables) | Deliberate audit trail, not for display |
 | `users.gender`, `birth_date` | Never read or written |
+
+
+
+New Idea, I want to clip my games. So I can log timestamps from each game, that same timestamp is then answering all the topics about my performance (So I can sit in a video-preview. In that preview I can clip videos)
+
+I also consider integrating the games from profixio. I could use the stats from there? Or use the visual aspects? Not certain if I will use it.

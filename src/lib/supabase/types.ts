@@ -878,18 +878,21 @@ export type Database = {
           birth_date: string | null
           created_at: string | null
           gender: string | null
+          height_cm: number | null
           id: string
         }
         Insert: {
           birth_date?: string | null
           created_at?: string | null
           gender?: string | null
+          height_cm?: number | null
           id?: string
         }
         Update: {
           birth_date?: string | null
           created_at?: string | null
           gender?: string | null
+          height_cm?: number | null
           id?: string
         }
         Relationships: []
@@ -949,6 +952,7 @@ export type Database = {
       session_type:
         | "strength_power"
         | "cardio"
+        | "general_cardio"
         | "mobility_rehab"
         | "active_rest"
         | "handball"
@@ -1083,6 +1087,7 @@ export const Constants = {
       session_type: [
         "strength_power",
         "cardio",
+        "general_cardio",
         "mobility_rehab",
         "active_rest",
         "handball",
