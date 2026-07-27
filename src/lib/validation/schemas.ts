@@ -1,5 +1,11 @@
 import { z } from "zod"
 import { HANDBALL_POSITIONS } from "@/lib/handball/vocab"
+import {
+  EVENT_SOURCES,
+  MATCH_EVENT_TYPES,
+  MATCH_PHASES,
+  SHOT_ORIGINS,
+} from "@/lib/handball/events"
 
 // FormData only ever yields strings, and an untouched optional input arrives
 // as "". Before these schemas existed the actions did `Number(formData.get(x))`
@@ -129,6 +135,44 @@ export const readinessSchema = z.object({
   mood: requiredInt(0, 10),
   recovery_energy: requiredInt(0, 10),
 })
+
+// The review UI sends plain objects over a typed server action rather than
+// FormData, so these need none of the emptyToNull coercion above - the client
+// already holds real numbers and nulls. `id` is minted client-side so every
+// write can be an idempotent upsert; see the review actions.
+const nullableNumber = z.number().finite().nullable().optional()
+
+export const matchEventSchema = z.object({
+  id: z.uuid(),
+  session_id: z.uuid(),
+  video_id: z.uuid().nullable().optional(),
+  event_type: z.enum(MATCH_EVENT_TYPES),
+  shot_origin: z.enum(SHOT_ORIGINS).nullable().optional(),
+  phase: z.enum(MATCH_PHASES).nullable().optional(),
+  video_offset_seconds: z.number().finite().min(0).nullable().optional(),
+  period: z.number().int().min(1).max(4).nullable().optional(),
+  clock_seconds: z.number().int().min(0).nullable().optional(),
+  score_us: z.number().int().min(0).max(200).nullable().optional(),
+  score_them: z.number().int().min(0).max(200).nullable().optional(),
+  position: z.enum(HANDBALL_POSITIONS).nullable().optional(),
+  court_x: nullableNumber,
+  court_y: nullableNumber,
+  goal_cell: z.number().int().min(1).max(9).nullable().optional(),
+  note: z.string().trim().max(500).nullable().optional(),
+  source: z.enum(EVENT_SOURCES).optional(),
+})
+
+export const matchVideoSchema = z.object({
+  kind: z.enum(["local_file", "url"]),
+  label: z.string().trim().max(60).nullable().optional(),
+  url: z.string().url().nullable().optional(),
+  file_name: z.string().trim().max(400).nullable().optional(),
+  file_size_bytes: z.number().int().min(0).nullable().optional(),
+  duration_seconds: z.number().finite().min(0).nullable().optional(),
+})
+
+export type MatchEventInput = z.infer<typeof matchEventSchema>
+export type MatchVideoInput = z.infer<typeof matchVideoSchema>
 
 export type PracticeInput = z.infer<typeof practiceSchema>
 export type WorkoutInput = z.infer<typeof workoutSchema>

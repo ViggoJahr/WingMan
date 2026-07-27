@@ -99,13 +99,19 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   let match = null
   let practice = null
+  let eventCount = 0
   if (handball) {
-    const [{ data: m }, { data: p }] = await Promise.all([
+    const [{ data: m }, { data: p }, { count }] = await Promise.all([
       supabase.from("matches").select("*").eq("session_id", id).maybeSingle(),
       supabase.from("team_practices").select("*").eq("session_id", id).maybeSingle(),
+      supabase
+        .from("match_events")
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", id),
     ])
     match = m
     practice = p
+    eventCount = count ?? 0
   }
 
   const duration = formatDuration(session.start_time, session.end_time)
@@ -271,24 +277,32 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             </CardHeader>
             <CardContent className="text-sm">
               {match && (
-                <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div>
-                    <dt className="text-muted-foreground">Opponent</dt>
-                    <dd className="font-medium">{match.opponent ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Goals</dt>
-                    <dd className="font-medium">{match.goals}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Assists</dt>
-                    <dd className="font-medium">{match.assists}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Steals</dt>
-                    <dd className="font-medium">{match.steals}</dd>
-                  </div>
-                </dl>
+                <>
+                  <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div>
+                      <dt className="text-muted-foreground">Opponent</dt>
+                      <dd className="font-medium">{match.opponent ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Goals</dt>
+                      <dd className="font-medium">{match.goals}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Assists</dt>
+                      <dd className="font-medium">{match.assists}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Steals</dt>
+                      <dd className="font-medium">{match.steals}</dd>
+                    </div>
+                  </dl>
+                  <Link
+                    href={`/sessions/${id}/review`}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}
+                  >
+                    {eventCount > 0 ? `Review video - ${eventCount} events` : "Tag events from video"}
+                  </Link>
+                </>
               )}
               {practice && (
                 <dl className="grid grid-cols-2 gap-2">

@@ -109,6 +109,13 @@ backfilled, so they should start early even if polish lags.
 
 The largest new capture surface and the highest-value one.
 
+> **Superseded in part — built as `match_events`, not `shots`.** A shot *is* a
+> match event, and two tables would mean two timelines to merge in the clip
+> library. `match_events` carries `event_type` (the outcome), `shot_origin` (the
+> separate origin dimension), `phase`, and nullable `court_x` / `court_y` /
+> `goal_cell` columns that nothing writes yet. So everything below still holds —
+> it is now UI work on an existing table rather than a new migration.
+
 A `shots` table: `match_id`, `match_minute`, `court_x` / `court_y` (metres on a
 40×20 court), derived `court_zone`, `goal_cell` (1–9, null when off target),
 `outcome` (goal / save / miss / block / post), `shot_type` (jump / set / running
@@ -392,5 +399,13 @@ relevant page is next touched:
 
 
 New Idea, I want to clip my games. So I can log timestamps from each game, that same timestamp is then answering all the topics about my performance (So I can sit in a video-preview. In that preview I can clip videos)
+
+> **Built** — `/sessions/[id]/review`. Tag against the video with the keyboard;
+> every tag stores a video offset plus the derived period and match clock, and
+> the clip list seeks straight back to any moment. The video itself stays on the
+> machine: Postgres holds the tags and a `handle_key`, the browser holds the
+> `FileSystemFileHandle` in IndexedDB, so a return visit costs at most one click.
+> Box-score counters are derived from the events (`deriveBoxScore`, and the
+> `match_box_score` view once the backfill lands) rather than typed twice.
 
 I also consider integrating the games from profixio. I could use the stats from there? Or use the visual aspects? Not certain if I will use it.

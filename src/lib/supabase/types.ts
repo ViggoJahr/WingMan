@@ -490,6 +490,134 @@ export type Database = {
           },
         ]
       }
+      match_events: {
+        Row: {
+          clock_seconds: number | null
+          court_x: number | null
+          court_y: number | null
+          created_at: string
+          event_type: string
+          goal_cell: number | null
+          id: string
+          note: string | null
+          period: number | null
+          phase: string | null
+          position: string | null
+          score_them: number | null
+          score_us: number | null
+          session_id: string
+          shot_origin: string | null
+          source: string
+          video_id: string | null
+          video_offset_seconds: number | null
+        }
+        Insert: {
+          clock_seconds?: number | null
+          court_x?: number | null
+          court_y?: number | null
+          created_at?: string
+          event_type: string
+          goal_cell?: number | null
+          id?: string
+          note?: string | null
+          period?: number | null
+          phase?: string | null
+          position?: string | null
+          score_them?: number | null
+          score_us?: number | null
+          session_id: string
+          shot_origin?: string | null
+          source?: string
+          video_id?: string | null
+          video_offset_seconds?: number | null
+        }
+        Update: {
+          clock_seconds?: number | null
+          court_x?: number | null
+          court_y?: number | null
+          created_at?: string
+          event_type?: string
+          goal_cell?: number | null
+          id?: string
+          note?: string | null
+          period?: number | null
+          phase?: string | null
+          position?: string | null
+          score_them?: number | null
+          score_us?: number | null
+          session_id?: string
+          shot_origin?: string | null
+          source?: string
+          video_id?: string | null
+          video_offset_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "match_events_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "match_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_videos: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          file_name: string | null
+          file_size_bytes: number | null
+          handle_key: string | null
+          id: string
+          kind: string
+          label: string | null
+          period_offsets: Json
+          session_id: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          handle_key?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          period_offsets?: Json
+          session_id: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          handle_key?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          period_offsets?: Json
+          session_id?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_videos_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["session_id"]
+          },
+        ]
+      }
       matches: {
         Row: {
           assists: number | null
