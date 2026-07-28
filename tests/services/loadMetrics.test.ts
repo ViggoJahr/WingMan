@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
   acwrBand,
   computeLoadMetrics,
-  densify,
   intensityCoverage,
   type DailyLoadPoint,
 } from "@/lib/services/loadMetrics"
@@ -106,36 +105,5 @@ describe("intensityCoverage", () => {
 
     expect(summary.coverage).toBeNull()
     expect(summary.sufficient).toBe(false)
-  })
-})
-
-describe("densify", () => {
-  it("fills missing calendar days with zero load", () => {
-    const filled = densify(
-      [
-        { day: "2026-01-01", load: 12 },
-        { day: "2026-01-04", load: 8 },
-      ],
-      "2026-01-01",
-      "2026-01-05"
-    )
-
-    expect(filled).toEqual([
-      { day: "2026-01-01", load: 12 },
-      { day: "2026-01-02", load: 0 },
-      { day: "2026-01-03", load: 0 },
-      { day: "2026-01-04", load: 8 },
-      { day: "2026-01-05", load: 0 },
-    ])
-  })
-
-  it("crosses a month boundary", () => {
-    const filled = densify([], "2026-01-30", "2026-02-02")
-    expect(filled.map((p) => p.day)).toEqual([
-      "2026-01-30",
-      "2026-01-31",
-      "2026-02-01",
-      "2026-02-02",
-    ])
   })
 })

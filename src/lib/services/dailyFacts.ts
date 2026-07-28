@@ -11,6 +11,16 @@ export type DailyFact = Database["public"]["Views"]["daily_facts"]["Row"]
  */
 export type DailyFactRow = DailyFact & { day: string }
 
+/**
+ * Reads one numeric fact off a row. PostgREST hands `numeric` columns back as
+ * strings, so every consumer would otherwise have to coerce defensively.
+ */
+export function factNumber(value: number | string | null | undefined): number | null {
+  if (value == null) return null
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
 export const DAILY_FACT_COLUMNS =
   "day, session_count, total_load, load_estimate, sessions_with_intensity, " +
   "sessions_with_rpe, max_rpe, total_duration_min, calories_kcal, " +
