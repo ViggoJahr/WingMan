@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
-import { fetchDailyFacts, type DailyFactRow } from "@/lib/services/dailyFacts"
+import { fetchDailyFacts, factNumber as num, type DailyFactRow } from "@/lib/services/dailyFacts"
+import { sessionTypeLabel } from "@/lib/labels"
 import { todayIso } from "@/lib/dates"
 import {
   ACWR_BAND_LABEL,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/services/loadMetrics"
 import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap"
 import { StatTile, type TileStatus } from "@/components/StatTile"
-import { SessionList, SESSION_TYPE_LABEL, type SessionRowData } from "@/components/SessionRow"
+import { SessionList, type SessionRowData } from "@/components/SessionRow"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
 
 // The heatmap shows 26 weeks; ACWR needs 28 days of history before that to be
@@ -22,12 +23,6 @@ import { RpeQuickSet } from "@/components/RpeQuickSet"
 const HISTORY_DAYS = 210
 const HEATMAP_WEEKS = 26
 const CHRONIC_WINDOW_DAYS = 28
-
-function num(value: number | null | undefined): number | null {
-  if (value == null) return null
-  const n = Number(value)
-  return Number.isFinite(n) ? n : null
-}
 
 function sumOf(rows: DailyFactRow[], key: keyof DailyFactRow): number {
   return rows.reduce((acc, row) => acc + (num(row[key] as number | null) ?? 0), 0)
@@ -301,10 +296,7 @@ export default async function Home({
             {unratedRecent.slice(0, 4).map((s) => (
               <div key={s.id} className="flex flex-col gap-1.5 border-t pt-3 first:border-t-0 first:pt-0">
                 <Link href={`/sessions/${s.id}`} className="text-sm font-medium hover:underline">
-                  {s.cardio_sessions?.focus ??
-                    s.strength_sessions?.focus ??
-                    SESSION_TYPE_LABEL[s.type] ??
-                    s.type}
+                  {s.cardio_sessions?.focus ?? s.strength_sessions?.focus ?? sessionTypeLabel(s.type)}
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
                     {new Date(s.start_time).toLocaleDateString(undefined, {
                       day: "numeric",

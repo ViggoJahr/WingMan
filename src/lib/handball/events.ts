@@ -182,10 +182,6 @@ export function deriveBoxScore(events: readonly MatchEventLike[]): BoxScore {
   return score
 }
 
-export function isMatchEventType(value: string): value is MatchEventType {
-  return (MATCH_EVENT_TYPES as readonly string[]).includes(value)
-}
-
 /** Palette key -> event type, for the keyboard handler. Built once. */
 export const EVENT_TYPE_BY_KEY: Record<string, MatchEventType> = Object.fromEntries(
   PALETTE_EVENT_TYPES.map((type) => [EVENT_META[type].key, type])

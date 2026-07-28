@@ -6,6 +6,7 @@ import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
+import { sessionTypeLabel, sourceLabel } from "@/lib/labels"
 import {
   POSITION_LABELS,
   loadBandLabel,
@@ -14,20 +15,6 @@ import {
 } from "@/lib/handball/vocab"
 import { HeartRateChart } from "./HeartRateChart"
 import { deleteSession } from "./actions"
-
-const SESSION_TYPE_LABEL: Record<string, string> = {
-  strength_power: "Strength",
-  cardio: "Cardio",
-  general_cardio: "Other activity",
-  mobility_rehab: "Mobility/Rehab",
-  active_rest: "Active rest",
-  handball: "Handball",
-}
-
-const SOURCE_LABEL: Record<string, string> = {
-  tugg: "TUGG",
-  google_health: "Google Health",
-}
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
@@ -121,7 +108,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <div>
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-2xl font-semibold">
-              {SESSION_TYPE_LABEL[session.type] ?? session.type}
+              {sessionTypeLabel(session.type)}
               {(cardio?.focus || strength?.focus) && ` - ${cardio?.focus ?? strength?.focus}`}
             </h1>
             {session.external_source === null ? (
@@ -136,14 +123,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               </div>
             ) : (
               <p className="shrink-0 text-xs text-muted-foreground">
-                Synced from {SOURCE_LABEL[session.external_source] ?? session.external_source} - edit disabled
+                Synced from {sourceLabel(session.external_source)} - edit disabled
               </p>
             )}
           </div>
           <p className="text-muted-foreground">{formatDateTime(session.start_time)}</p>
           {sourcesInvolved.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              Data from {sourcesInvolved.map((s) => SOURCE_LABEL[s] ?? s).join(" + ")}
+              Data from {sourcesInvolved.map(sourceLabel).join(" + ")}
             </p>
           )}
         </div>

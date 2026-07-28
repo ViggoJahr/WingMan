@@ -1,18 +1,11 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SessionList, type SessionRowData } from "@/components/SessionRow"
+import { Pagination, pageParam, paginationRange, splitPage } from "@/components/Pagination"
 import { createClient } from "@/lib/supabase/server"
+import { SESSION_TYPES, sessionTypeLabel, sourceLabel, toSessionType } from "@/lib/labels"
 
 const PAGE_SIZE = 30
-
-const SESSION_TYPES = [
-  "strength_power",
-  "cardio",
-  "general_cardio",
-  "mobility_rehab",
-  "active_rest",
-  "handball",
-] as const
 
 interface Filters {
   type?: string
@@ -23,9 +16,9 @@ interface Filters {
 }
 
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<Filters> }) {
-  const { type, source, from, to, page: pageParam } = await searchParams
+  const { type, source, from, to, page: rawPage } = await searchParams
   const supabase = await createClient()
-  const page = Math.max(0, Number(pageParam ?? 0))
+  const page = pageParam(rawPage)
 
   let query = supabase
     .from("sessions")
@@ -34,17 +27,20 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     )
     .is("merged_into", null)
     .order("start_time", { ascending: false })
-    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+    .range(...paginationRange(page, PAGE_SIZE))
 
-  if (type) query = query.eq("type", type as (typeof SESSION_TYPES)[number])
+  // Narrowed rather than cast, so a hand-edited ?type= that matches nothing is
+  // ignored instead of being sent to Postgres as an invalid enum value.
+  const typeFilter = toSessionType(type)
+  if (typeFilter) query = query.eq("type", typeFilter)
   if (source === "manual") query = query.is("external_source", null)
   else if (source === "tugg" || source === "google_health") query = query.eq("external_source", source)
   if (from) query = query.gte("start_time", new Date(from).toISOString())
   if (to) query = query.lte("start_time", new Date(new Date(to).getTime() + 86_400_000).toISOString())
 
   const { data: rows } = await query
-  const hasNext = (rows ?? []).length > PAGE_SIZE
-  const sessions = (rows ?? []).slice(0, PAGE_SIZE).map((s) => ({
+  const { items, hasNext } = splitPage(rows, PAGE_SIZE)
+  const sessions = items.map((s) => ({
     ...s,
     cardio_sessions: s.cardio_sessions as unknown as SessionRowData["cardio_sessions"],
     strength_sessions: s.strength_sessions as unknown as SessionRowData["strength_sessions"],
@@ -75,7 +71,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
               <option value="">All</option>
               {SESSION_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {sessionTypeLabel(t)}
                 </option>
               ))}
             </select>
@@ -90,8 +86,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             >
               <option value="">All</option>
               <option value="manual">Manual</option>
-              <option value="tugg">TUGG</option>
-              <option value="google_health">Google Health</option>
+              <option value="tugg">{sourceLabel("tugg")}</option>
+              <option value="google_health">{sourceLabel("google_health")}</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">
@@ -133,20 +129,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           </CardContent>
         </Card>
 
-        <div className="flex justify-between text-sm">
-          {page > 0 ? (
-            <Link href={pageLink(page - 1)} className="underline">
-              Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          {hasNext && (
-            <Link href={pageLink(page + 1)} className="underline">
-              Next
-            </Link>
-          )}
-        </div>
+        <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
       </div>
   )
 }

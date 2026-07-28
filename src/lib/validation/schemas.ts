@@ -13,7 +13,6 @@ import {
 // up on .toISOString() - or silently wrote NaN into the database.
 
 const emptyToNull = (value: unknown) => (value === "" || value == null ? null : value)
-const emptyToZero = (value: unknown) => (value === "" || value == null ? 0 : value)
 
 const optionalText = z.preprocess(emptyToNull, z.string().trim().min(1).nullable())
 
@@ -23,11 +22,6 @@ function optionalInt(min: number, max: number) {
 
 function optionalDecimal(min: number, max: number) {
   return z.preprocess(emptyToNull, z.coerce.number().min(min).max(max).nullable())
-}
-
-/** Counting stats default to 0 rather than null - "didn't score" is a real 0. */
-function countInt(max = 999) {
-  return z.preprocess(emptyToZero, z.coerce.number().int().min(0).max(max))
 }
 
 function requiredInt(min: number, max: number) {

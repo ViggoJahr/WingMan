@@ -101,10 +101,6 @@ export async function getHandle(key: string): Promise<VideoFileHandle | null> {
   return withStore<VideoFileHandle>("readonly", (store) => store.get(key))
 }
 
-export async function deleteHandle(key: string): Promise<void> {
-  await withStore("readwrite", (store) => store.delete(key) as IDBRequest<undefined>)
-}
-
 /**
  * Resolves a stored handle to a File without prompting, when the browser still
  * remembers the grant. Returns null when a user gesture is required - the caller

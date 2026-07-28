@@ -14,25 +14,18 @@ export interface VideoSurfaceHandle {
   play(): void
   pause(): void
   toggle(): void
-  isPaused(): boolean
-  duration(): number | null
 }
 
 export function VideoSurface({
   ref,
   file,
   url,
-  onReady,
-  onTimeUpdate,
   className,
 }: {
   ref?: Ref<VideoSurfaceHandle>
   /** Local file chosen by the user. Takes precedence over `url`. */
   file?: File | null
   url?: string | null
-  /** Fires once metadata is available, with the video duration in seconds. */
-  onReady?: (durationSeconds: number) => void
-  onTimeUpdate?: (seconds: number) => void
   className?: string
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -85,11 +78,6 @@ export function VideoSurface({
         if (el.paused) void el.play()
         else el.pause()
       },
-      isPaused: () => videoRef.current?.paused ?? true,
-      duration() {
-        const value = videoRef.current?.duration
-        return value != null && Number.isFinite(value) ? value : null
-      },
     }),
     []
   )
@@ -102,11 +90,6 @@ export function VideoSurface({
       controls
       preload="metadata"
       className={cn("w-full rounded-md bg-black", !file && !url && "hidden", className)}
-      onLoadedMetadata={(event) => {
-        const duration = event.currentTarget.duration
-        if (Number.isFinite(duration)) onReady?.(duration)
-      }}
-      onTimeUpdate={(event) => onTimeUpdate?.(event.currentTarget.currentTime)}
     />
   )
 }
