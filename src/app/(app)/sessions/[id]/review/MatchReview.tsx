@@ -30,6 +30,18 @@ import type { LocalEvent, MatchEventRow, MatchVideoRow } from "./reviewTypes"
 
 const PERIODS = [1, 2] as const
 
+/**
+ * Where the scoreboard had got to when tagging last stopped. A score only ever
+ * climbs, so the highest stored value is the resume point - and taking the max
+ * mirrors how the match_box_score view derives the final score.
+ *
+ * Without this, reloading mid-match restarted the count at 0-0 and every event
+ * tagged afterwards carried a score lower than the one already on screen.
+ */
+function resumeScore(events: MatchEventRow[], field: "score_us" | "score_them"): number {
+  return events.reduce((highest, event) => Math.max(highest, event[field] ?? 0), 0)
+}
+
 /** Strips client-only fields before the event goes over the wire. */
 function toInput(event: LocalEvent): MatchEventInput {
   return {
@@ -79,8 +91,8 @@ export function MatchReview({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [editingNote, setEditingNote] = useState<string | null>(null)
   const [pauseOnTag, setPauseOnTag] = useState(true)
-  const [scoreUs, setScoreUs] = useState(0)
-  const [scoreThem, setScoreThem] = useState(0)
+  const [scoreUs, setScoreUs] = useState(() => resumeScore(initialEvents, "score_us"))
+  const [scoreThem, setScoreThem] = useState(() => resumeScore(initialEvents, "score_them"))
   const [, startTransition] = useTransition()
 
   // Hoisted so the memo dependencies below name exactly what is read - the
