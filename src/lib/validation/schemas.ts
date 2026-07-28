@@ -108,18 +108,9 @@ export const matchSchema = z.object({
   perceived_challenge: optionalInt(1, 10),
   importance: optionalInt(1, 10),
   opposition_difficulty: optionalInt(1, 10),
-  goals: countInt(),
-  assists: countInt(),
-  technical_faults: countInt(),
-  steals: countInt(),
-  shots_missed: countInt(),
-  shots_saved: countInt(),
-  nine_m_shots: countInt(),
-  breakthroughs: countInt(),
-  suspensions_created: countInt(),
-  suspensions_received: countInt(),
-  blocks: countInt(),
-  big_mistakes: countInt(),
+  // The 12 box-score counters used to live here. They are now derived by
+  // counting match_events (see the match_box_score view), so the form no longer
+  // collects them and nothing writes the columns.
 })
 
 export const readinessSchema = z.object({

@@ -101,17 +101,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   let practice = null
   let eventCount = 0
   if (handball) {
-    const [{ data: m }, { data: p }, { count }] = await Promise.all([
-      supabase.from("matches").select("*").eq("session_id", id).maybeSingle(),
+    // Counters come from the derived view, not the stale columns on `matches`.
+    const [{ data: m }, { data: p }] = await Promise.all([
+      supabase.from("match_box_score").select("*").eq("session_id", id).maybeSingle(),
       supabase.from("team_practices").select("*").eq("session_id", id).maybeSingle(),
-      supabase
-        .from("match_events")
-        .select("id", { count: "exact", head: true })
-        .eq("session_id", id),
     ])
     match = m
     practice = p
-    eventCount = count ?? 0
+    eventCount = m?.event_count ?? 0
   }
 
   const duration = formatDuration(session.start_time, session.end_time)
@@ -283,17 +280,37 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       <dt className="text-muted-foreground">Opponent</dt>
                       <dd className="font-medium">{match.opponent ?? "-"}</dd>
                     </div>
+                    {match.final_score_us != null && match.final_score_them != null && (
+                      <div>
+                        <dt className="text-muted-foreground">Score</dt>
+                        <dd className="font-medium tabular-nums">
+                          {match.final_score_us}-{match.final_score_them}
+                        </dd>
+                      </div>
+                    )}
                     <div>
                       <dt className="text-muted-foreground">Goals</dt>
-                      <dd className="font-medium">{match.goals}</dd>
+                      <dd className="font-medium tabular-nums">{match.goals}</dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Assists</dt>
-                      <dd className="font-medium">{match.assists}</dd>
+                      <dd className="font-medium tabular-nums">{match.assists}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">9m</dt>
+                      <dd className="font-medium tabular-nums">{match.nine_m_shots}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Breakthroughs</dt>
+                      <dd className="font-medium tabular-nums">{match.breakthroughs}</dd>
                     </div>
                     <div>
                       <dt className="text-muted-foreground">Steals</dt>
-                      <dd className="font-medium">{match.steals}</dd>
+                      <dd className="font-medium tabular-nums">{match.steals}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Tech faults</dt>
+                      <dd className="font-medium tabular-nums">{match.technical_faults}</dd>
                     </div>
                   </dl>
                   <Link

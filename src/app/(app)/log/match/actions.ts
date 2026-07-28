@@ -5,7 +5,14 @@ import { createClient } from "@/lib/supabase/server"
 import { matchSchema, type MatchInput } from "@/lib/validation/schemas"
 import { failure, validationError, type ActionState } from "@/lib/validation/formState"
 
-/** The box-score columns, identical between insert and update. */
+/**
+ * The descriptive match columns, identical between insert and update.
+ *
+ * The 12 box-score counters are deliberately absent: they are derived by
+ * counting match_events through the match_box_score view. Writing them here as
+ * well would give two sources of truth that silently diverge the first time a
+ * tagged event is added or removed.
+ */
 function matchStats(input: MatchInput) {
   return {
     opponent: input.opponent,
@@ -13,18 +20,6 @@ function matchStats(input: MatchInput) {
     play_time_min: input.play_time_min,
     importance: input.importance,
     opposition_difficulty: input.opposition_difficulty,
-    goals: input.goals,
-    assists: input.assists,
-    technical_faults: input.technical_faults,
-    steals: input.steals,
-    shots_missed: input.shots_missed,
-    shots_saved: input.shots_saved,
-    nine_m_shots: input.nine_m_shots,
-    breakthroughs: input.breakthroughs,
-    suspensions_created: input.suspensions_created,
-    suspensions_received: input.suspensions_received,
-    blocks: input.blocks,
-    big_mistakes: input.big_mistakes,
   }
 }
 

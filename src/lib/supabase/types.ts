@@ -1036,6 +1036,38 @@ export type Database = {
       }
     }
     Views: {
+      // Hand-maintained alongside daily_facts - see README.md; a `supabase gen
+      // types` run drops both and they have to be re-added.
+      match_box_score: {
+        Row: {
+          session_id: string | null
+          start_time: string | null
+          rpe: number | null
+          merged_into: string | null
+          opponent: string | null
+          is_home: boolean | null
+          importance: number | null
+          opposition_difficulty: number | null
+          play_time_min: number | null
+          goals: number | null
+          shots_missed: number | null
+          shots_saved: number | null
+          nine_m_shots: number | null
+          breakthroughs: number | null
+          technical_faults: number | null
+          assists: number | null
+          suspensions_created: number | null
+          suspensions_received: number | null
+          steals: number | null
+          blocks: number | null
+          big_mistakes: number | null
+          final_score_us: number | null
+          final_score_them: number | null
+          clipped_events: number | null
+          event_count: number | null
+        }
+        Relationships: []
+      }
       daily_facts: {
         Row: {
           user_id: string | null
