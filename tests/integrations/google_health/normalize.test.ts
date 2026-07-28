@@ -3,7 +3,6 @@ import {
   bucketByDay,
   normalizeBodyFat,
   normalizeExercise,
-  normalizeHeight,
   normalizeSleep,
   normalizeWeight,
 } from "@/lib/integrations/google_health/normalize"
@@ -153,19 +152,6 @@ describe("normalizeBodyFat", () => {
     const result = normalizeBodyFat(dp, USER_ID)
     expect(result.body_fat_percentage).toBe(17.7)
     expect(result.date).toBe("2026-07-25")
-  })
-})
-
-describe("normalizeHeight", () => {
-  it("converts millimeters (as a string) to cm", () => {
-    const dp = {
-      height: {
-        sampleTime: { civilTime: { date: { year: 2026, month: 6, day: 6 } } },
-        heightMillimeters: "1780",
-      },
-    }
-    const result = normalizeHeight(dp, USER_ID)
-    expect(result.height_cm).toBe(178)
   })
 })
 

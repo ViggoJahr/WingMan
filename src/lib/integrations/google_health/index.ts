@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "@/lib/supabase/types"
+import type { Database, TablesInsert } from "@/lib/supabase/types"
 import { decrypt, encrypt } from "@/lib/crypto"
 import type { IntegrationAccountRow, SourceAdapter, SyncResult } from "../types"
 import { refreshAccessToken } from "./auth"
@@ -167,28 +167,39 @@ async function sync(
   })
   const azmByDay = bucketByDay(results.activeZoneMinutes, "activeZoneMinutes", "activeZoneMinutes", "sum")
 
-  const days = new Set([
-    ...stepsByDay.keys(),
-    ...restingHrByDay.keys(),
-    ...hrvByDay.keys(),
-    ...spo2ByDay.keys(),
-    ...azmByDay.keys(),
-  ])
+  // Each metric is written only on the days it actually produced a value.
+  // Sending `?? null` for the others would push nulls over good data whenever a
+  // fetch failed: allSettled degrades the run to `partial` and leaves that
+  // metric's map empty, which used to blank the column across the whole 30-day
+  // window. Omitting a column keeps it out of the ON CONFLICT SET list, so the
+  // stored value survives.
+  const metricSeries: Array<{
+    column: "steps" | "resting_heart_rate" | "avg_hrv_ms" | "avg_spo2_percentage" | "active_zone_minutes"
+    byDay: Map<string, number>
+  }> = [
+    { column: "steps", byDay: stepsByDay },
+    { column: "resting_heart_rate", byDay: restingHrByDay },
+    { column: "avg_hrv_ms", byDay: hrvByDay },
+    { column: "avg_spo2_percentage", byDay: spo2ByDay },
+    { column: "active_zone_minutes", byDay: azmByDay },
+  ]
+
+  const days = new Set(metricSeries.flatMap(({ byDay }) => [...byDay.keys()]))
   for (const day of days) {
-    const { error } = await db.from("daily_metrics").upsert(
-      {
-        user_id: userId,
-        date: day,
-        steps: stepsByDay.get(day) ?? null,
-        resting_heart_rate: restingHrByDay.get(day) ?? null,
-        avg_hrv_ms: hrvByDay.get(day) ?? null,
-        avg_spo2_percentage: spo2ByDay.get(day) ?? null,
-        active_zone_minutes: azmByDay.get(day) ?? null,
-        external_source: "google_health",
-        external_id: day,
-      },
-      { onConflict: "user_id,external_source,external_id" }
-    )
+    const row: TablesInsert<"daily_metrics"> = {
+      user_id: userId,
+      date: day,
+      external_source: "google_health",
+      external_id: day,
+    }
+    for (const { column, byDay } of metricSeries) {
+      const value = byDay.get(day)
+      if (value != null) row[column] = value
+    }
+
+    const { error } = await db
+      .from("daily_metrics")
+      .upsert(row, { onConflict: "user_id,external_source,external_id" })
     if (error) throw new Error(`Failed to upsert daily metric: ${error.message}`)
     itemsSynced++
   }

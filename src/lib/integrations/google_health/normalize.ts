@@ -203,25 +203,10 @@ export function normalizeBodyFat(dp: GoogleHealthDataPoint, userId: string) {
   }
 }
 
-export function normalizeHeight(dp: GoogleHealthDataPoint, userId: string) {
-  const height = dp.height as {
-    sampleTime?: { physicalTime?: string; civilTime?: { date?: { year: number; month: number; day: number } } }
-    heightMillimeters?: string
-  }
-  const cd = height.sampleTime?.civilTime?.date
-  const date = cd
-    ? civilDate(cd)
-    : (height.sampleTime?.physicalTime ?? isoFromMs(pointTimeMs(dp, "height"))).slice(0, 10)
-  const mm = parseIntString(height.heightMillimeters)
-
-  return {
-    user_id: userId,
-    date,
-    height_cm: mm != null ? mm / 10 : null,
-    external_source: "google_health",
-    external_id: pointId(dp),
-  }
-}
+// normalizeHeight lived here until height sync was dropped: the value is
+// recorded once and never changes, so the source record always falls outside
+// the sync window - 0 of 24 body_metrics rows ever received one. Height is a
+// profile field entered in Settings now (users.height_cm).
 
 /**
  * Identifies the device/platform that recorded a data point.
