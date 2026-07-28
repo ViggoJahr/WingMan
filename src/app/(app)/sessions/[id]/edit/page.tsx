@@ -38,18 +38,27 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
   if (session.type === "handball") {
     const { data: handball } = await supabase
       .from("handball_sessions")
-      .select("subtype, defense_vs_attack_ratio, comments, perceived_performance, perceived_challenge")
+      .select(
+        "subtype, defense_vs_attack_ratio, comments, perceived_performance, perceived_challenge, throws_count, jump_load, contact_load, position"
+      )
       .eq("session_id", id)
       .maybeSingle()
 
     if (handball?.subtype === "match") {
-      const { data: match } = await supabase.from("matches").select("*").eq("session_id", id).maybeSingle()
+      const [{ data: match }, { count }] = await Promise.all([
+        supabase.from("matches").select("*").eq("session_id", id).maybeSingle(),
+        supabase
+          .from("match_events")
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", id),
+      ])
       if (!match) notFound()
       title = "Edit match"
       form = (
         <MatchForm
           mode="edit"
           sessionId={id}
+          eventCount={count ?? 0}
           defaultValues={{
             start_time: toDatetimeLocal(session.start_time),
             opponent: match.opponent,
@@ -62,18 +71,6 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
             perceived_challenge: handball.perceived_challenge,
             rpe: session.rpe,
             comments: handball.comments,
-            goals: match.goals ?? 0,
-            assists: match.assists ?? 0,
-            shots_missed: match.shots_missed ?? 0,
-            shots_saved: match.shots_saved ?? 0,
-            nine_m_shots: match.nine_m_shots ?? 0,
-            breakthroughs: match.breakthroughs ?? 0,
-            technical_faults: match.technical_faults ?? 0,
-            suspensions_created: match.suspensions_created ?? 0,
-            suspensions_received: match.suspensions_received ?? 0,
-            steals: match.steals ?? 0,
-            blocks: match.blocks ?? 0,
-            big_mistakes: match.big_mistakes ?? 0,
           }}
         />
       )
@@ -98,6 +95,11 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
             defense_vs_attack_ratio: handball?.defense_vs_attack_ratio ?? null,
             tactical_complexity: practice.tactical_complexity,
             comments: handball?.comments ?? null,
+            throws_count: handball?.throws_count ?? null,
+            jump_load: handball?.jump_load ?? null,
+            contact_load: handball?.contact_load ?? null,
+            position: handball?.position ?? null,
+            perceived_performance: handball?.perceived_performance ?? null,
           }}
         />
       )

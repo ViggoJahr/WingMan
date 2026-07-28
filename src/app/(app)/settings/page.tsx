@@ -3,13 +3,9 @@ import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { createClient } from "@/lib/supabase/server"
+import { sourceLabel } from "@/lib/labels"
 import { ProfileForm } from "./ProfileForm"
 import { TuggConnectForm } from "./TuggConnectForm"
-
-const SOURCE_LABEL: Record<string, string> = {
-  tugg: "TUGG",
-  google_health: "Google Health",
-}
 
 export default async function SettingsPage({
   searchParams,
@@ -34,7 +30,7 @@ export default async function SettingsPage({
           <p className="text-muted-foreground">Connected data sources and sync status.</p>
           {connected && (
             <p className="mt-2 rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
-              Connected {SOURCE_LABEL[connected] ?? connected}.
+              Connected {sourceLabel(connected)}.
             </p>
           )}
           {error && (
@@ -53,7 +49,7 @@ export default async function SettingsPage({
               <ul className="flex flex-col divide-y text-sm">
                 {accounts.map((a) => (
                   <li key={a.source} className="flex items-center justify-between py-2">
-                    <span className="font-medium">{SOURCE_LABEL[a.source] ?? a.source}</span>
+                    <span className="font-medium">{sourceLabel(a.source)}</span>
                     <span className="text-muted-foreground">
                       {a.status}
                       {a.last_synced_at &&

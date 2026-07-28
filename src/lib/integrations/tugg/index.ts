@@ -24,21 +24,45 @@ import {
   normalizeWorkoutSession,
 } from "./normalize"
 
-async function findOrCreateExercise(db: SupabaseClient<Database>, name: string) {
-  const { data: existing } = await db
-    .from("exercises")
-    .select("id")
-    .ilike("name", name)
-    .maybeSingle()
-  if (existing) return existing.id
+/**
+ * Resolves an exercise name to its id, creating the row the first time.
+ *
+ * Memoised for the lifetime of one sync run: the same handful of lifts recur
+ * across every session, so this was issuing a SELECT per exercise per session -
+ * hundreds of round trips for a few dozen distinct names. The lookup is
+ * case-insensitive, so the cache is keyed on the lowercased name to match.
+ */
+function exerciseResolver(db: SupabaseClient<Database>) {
+  const cache = new Map<string, Promise<string>>()
 
-  const { data: created, error } = await db
-    .from("exercises")
-    .insert({ name })
-    .select("id")
-    .single()
-  if (error) throw new Error(`Failed to create exercise "${name}": ${error.message}`)
-  return created.id
+  async function resolve(name: string): Promise<string> {
+    const { data: existing } = await db
+      .from("exercises")
+      .select("id")
+      .ilike("name", name)
+      .maybeSingle()
+    if (existing) return existing.id
+
+    const { data: created, error } = await db
+      .from("exercises")
+      .insert({ name })
+      .select("id")
+      .single()
+    if (error) throw new Error(`Failed to create exercise "${name}": ${error.message}`)
+    return created.id
+  }
+
+  return (name: string): Promise<string> => {
+    const key = name.toLowerCase()
+    // The promise is cached, not the resolved id, so concurrent callers for a
+    // brand-new name share one insert rather than racing to create duplicates.
+    let pending = cache.get(key)
+    if (!pending) {
+      pending = resolve(name)
+      cache.set(key, pending)
+    }
+    return pending
+  }
 }
 
 async function sync(
@@ -89,6 +113,7 @@ async function sync(
 
   const planById = new Map(workoutPlans.map((p) => [p.id, p]))
   const assignmentById = new Map(workoutAssignments.map((a) => [a.id, a]))
+  const findOrCreateExercise = exerciseResolver(db)
 
   // Workout sessions (gym/strength) -> sessions + strength_sessions + exercise_sets
   for (const ws of workoutSessions) {
@@ -112,7 +137,7 @@ async function sync(
 
     const progressRows = exerciseProgress.filter((p) => p.workout_session_id === ws.id)
     for (const progress of progressRows) {
-      const exerciseId = await findOrCreateExercise(db, progress.exercise_name)
+      const exerciseId = await findOrCreateExercise(progress.exercise_name)
       await db
         .from("exercise_sets")
         .delete()

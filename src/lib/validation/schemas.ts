@@ -1,4 +1,11 @@
 import { z } from "zod"
+import { HANDBALL_POSITIONS } from "@/lib/handball/vocab"
+import {
+  EVENT_SOURCES,
+  MATCH_EVENT_TYPES,
+  MATCH_PHASES,
+  SHOT_ORIGINS,
+} from "@/lib/handball/events"
 
 // FormData only ever yields strings, and an untouched optional input arrives
 // as "". Before these schemas existed the actions did `Number(formData.get(x))`
@@ -6,7 +13,6 @@ import { z } from "zod"
 // up on .toISOString() - or silently wrote NaN into the database.
 
 const emptyToNull = (value: unknown) => (value === "" || value == null ? null : value)
-const emptyToZero = (value: unknown) => (value === "" || value == null ? 0 : value)
 
 const optionalText = z.preprocess(emptyToNull, z.string().trim().min(1).nullable())
 
@@ -16,11 +22,6 @@ function optionalInt(min: number, max: number) {
 
 function optionalDecimal(min: number, max: number) {
   return z.preprocess(emptyToNull, z.coerce.number().min(min).max(max).nullable())
-}
-
-/** Counting stats default to 0 rather than null - "didn't score" is a real 0. */
-function countInt(max = 999) {
-  return z.preprocess(emptyToZero, z.coerce.number().int().min(0).max(max))
 }
 
 function requiredInt(min: number, max: number) {
@@ -57,12 +58,23 @@ const sessionCore = {
   location: optionalText,
 }
 
+/** Position is a controlled vocabulary; the CHECK on handball_sessions matches. */
+const handballPosition = z.preprocess(emptyToNull, z.enum(HANDBALL_POSITIONS).nullable())
+
 export const practiceSchema = z.object({
   ...sessionCore,
   practice_focus: optionalText,
   defense_vs_attack_ratio: optionalText,
   tactical_complexity: optionalInt(1, 10),
   comments: optionalText,
+  // Tissue-specific dose. The form writes band midpoints for throws (0/15/55/110)
+  // and 0-3 bands for the other two; 400 is a generous ceiling for a hand-edited
+  // throws value rather than a real training limit.
+  throws_count: optionalInt(0, 400),
+  jump_load: optionalInt(0, 3),
+  contact_load: optionalInt(0, 3),
+  position: handballPosition,
+  perceived_performance: optionalInt(1, 10),
 })
 
 export const WORKOUT_TYPES = ["cardio", "strength_power", "mobility_rehab", "active_rest"] as const
@@ -90,18 +102,9 @@ export const matchSchema = z.object({
   perceived_challenge: optionalInt(1, 10),
   importance: optionalInt(1, 10),
   opposition_difficulty: optionalInt(1, 10),
-  goals: countInt(),
-  assists: countInt(),
-  technical_faults: countInt(),
-  steals: countInt(),
-  shots_missed: countInt(),
-  shots_saved: countInt(),
-  nine_m_shots: countInt(),
-  breakthroughs: countInt(),
-  suspensions_created: countInt(),
-  suspensions_received: countInt(),
-  blocks: countInt(),
-  big_mistakes: countInt(),
+  // The 12 box-score counters used to live here. They are now derived by
+  // counting match_events (see the match_box_score view), so the form no longer
+  // collects them and nothing writes the columns.
 })
 
 export const readinessSchema = z.object({
@@ -117,6 +120,44 @@ export const readinessSchema = z.object({
   mood: requiredInt(0, 10),
   recovery_energy: requiredInt(0, 10),
 })
+
+// The review UI sends plain objects over a typed server action rather than
+// FormData, so these need none of the emptyToNull coercion above - the client
+// already holds real numbers and nulls. `id` is minted client-side so every
+// write can be an idempotent upsert; see the review actions.
+const nullableNumber = z.number().finite().nullable().optional()
+
+export const matchEventSchema = z.object({
+  id: z.uuid(),
+  session_id: z.uuid(),
+  video_id: z.uuid().nullable().optional(),
+  event_type: z.enum(MATCH_EVENT_TYPES),
+  shot_origin: z.enum(SHOT_ORIGINS).nullable().optional(),
+  phase: z.enum(MATCH_PHASES).nullable().optional(),
+  video_offset_seconds: z.number().finite().min(0).nullable().optional(),
+  period: z.number().int().min(1).max(4).nullable().optional(),
+  clock_seconds: z.number().int().min(0).nullable().optional(),
+  score_us: z.number().int().min(0).max(200).nullable().optional(),
+  score_them: z.number().int().min(0).max(200).nullable().optional(),
+  position: z.enum(HANDBALL_POSITIONS).nullable().optional(),
+  court_x: nullableNumber,
+  court_y: nullableNumber,
+  goal_cell: z.number().int().min(1).max(9).nullable().optional(),
+  note: z.string().trim().max(500).nullable().optional(),
+  source: z.enum(EVENT_SOURCES).optional(),
+})
+
+export const matchVideoSchema = z.object({
+  kind: z.enum(["local_file", "url"]),
+  label: z.string().trim().max(60).nullable().optional(),
+  url: z.string().url().nullable().optional(),
+  file_name: z.string().trim().max(400).nullable().optional(),
+  file_size_bytes: z.number().int().min(0).nullable().optional(),
+  duration_seconds: z.number().finite().min(0).nullable().optional(),
+})
+
+export type MatchEventInput = z.infer<typeof matchEventSchema>
+export type MatchVideoInput = z.infer<typeof matchVideoSchema>
 
 export type PracticeInput = z.infer<typeof practiceSchema>
 export type WorkoutInput = z.infer<typeof workoutSchema>

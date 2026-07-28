@@ -270,27 +270,36 @@ export type Database = {
       handball_sessions: {
         Row: {
           comments: string | null
+          contact_load: number | null
           defense_vs_attack_ratio: string | null
+          jump_load: number | null
           perceived_challenge: number | null
           perceived_performance: number | null
+          position: string | null
           session_id: string
           subtype: Database["public"]["Enums"]["handball_subtype"]
           throws_count: number | null
         }
         Insert: {
           comments?: string | null
+          contact_load?: number | null
           defense_vs_attack_ratio?: string | null
+          jump_load?: number | null
           perceived_challenge?: number | null
           perceived_performance?: number | null
+          position?: string | null
           session_id: string
           subtype: Database["public"]["Enums"]["handball_subtype"]
           throws_count?: number | null
         }
         Update: {
           comments?: string | null
+          contact_load?: number | null
           defense_vs_attack_ratio?: string | null
+          jump_load?: number | null
           perceived_challenge?: number | null
           perceived_performance?: number | null
+          position?: string | null
           session_id?: string
           subtype?: Database["public"]["Enums"]["handball_subtype"]
           throws_count?: number | null
@@ -478,6 +487,134 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_events: {
+        Row: {
+          clock_seconds: number | null
+          court_x: number | null
+          court_y: number | null
+          created_at: string
+          event_type: string
+          goal_cell: number | null
+          id: string
+          note: string | null
+          period: number | null
+          phase: string | null
+          position: string | null
+          score_them: number | null
+          score_us: number | null
+          session_id: string
+          shot_origin: string | null
+          source: string
+          video_id: string | null
+          video_offset_seconds: number | null
+        }
+        Insert: {
+          clock_seconds?: number | null
+          court_x?: number | null
+          court_y?: number | null
+          created_at?: string
+          event_type: string
+          goal_cell?: number | null
+          id?: string
+          note?: string | null
+          period?: number | null
+          phase?: string | null
+          position?: string | null
+          score_them?: number | null
+          score_us?: number | null
+          session_id: string
+          shot_origin?: string | null
+          source?: string
+          video_id?: string | null
+          video_offset_seconds?: number | null
+        }
+        Update: {
+          clock_seconds?: number | null
+          court_x?: number | null
+          court_y?: number | null
+          created_at?: string
+          event_type?: string
+          goal_cell?: number | null
+          id?: string
+          note?: string | null
+          period?: number | null
+          phase?: string | null
+          position?: string | null
+          score_them?: number | null
+          score_us?: number | null
+          session_id?: string
+          shot_origin?: string | null
+          source?: string
+          video_id?: string | null
+          video_offset_seconds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "match_events_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "match_videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_videos: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          file_name: string | null
+          file_size_bytes: number | null
+          handle_key: string | null
+          id: string
+          kind: string
+          label: string | null
+          period_offsets: Json
+          session_id: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          handle_key?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          period_offsets?: Json
+          session_id: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          handle_key?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          period_offsets?: Json
+          session_id?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_videos_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["session_id"]
           },
         ]
       }
@@ -899,6 +1036,38 @@ export type Database = {
       }
     }
     Views: {
+      // Hand-maintained alongside daily_facts - see README.md; a `supabase gen
+      // types` run drops both and they have to be re-added.
+      match_box_score: {
+        Row: {
+          session_id: string | null
+          start_time: string | null
+          rpe: number | null
+          merged_into: string | null
+          opponent: string | null
+          is_home: boolean | null
+          importance: number | null
+          opposition_difficulty: number | null
+          play_time_min: number | null
+          goals: number | null
+          shots_missed: number | null
+          shots_saved: number | null
+          nine_m_shots: number | null
+          breakthroughs: number | null
+          technical_faults: number | null
+          assists: number | null
+          suspensions_created: number | null
+          suspensions_received: number | null
+          steals: number | null
+          blocks: number | null
+          big_mistakes: number | null
+          final_score_us: number | null
+          final_score_them: number | null
+          clipped_events: number | null
+          event_count: number | null
+        }
+        Relationships: []
+      }
       daily_facts: {
         Row: {
           user_id: string | null

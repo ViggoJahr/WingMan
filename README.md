@@ -56,6 +56,11 @@ npm test            # vitest run
 npm run check       # lint + typecheck + test
 ```
 
+`.github/workflows/ci.yml` runs `check` **and** `build` on every push to main and
+every pull request. `build` is not redundant: `next build` type-checks the route
+tree, which is where a bad server/client boundary surfaces — `tsc --noEmit`
+alone does not catch those.
+
 ## Database
 
 Plain SQL migrations in `supabase/migrations/` — no ORM. Types in
@@ -100,13 +105,28 @@ src/
 ├── components/
 │   ├── charts/               TrendChart (Recharts), ActivityHeatmap (SVG/CSS)
 │   ├── forms/FormParts.tsx   Field + error + submit primitives for useActionState
+│   ├── handball/             VideoSurface: the only component touching a <video>
+│   ├── Pagination.tsx        Prev/next links + the over-fetch helpers behind them
 │   └── StatTile.tsx          Dashboard tile: value, delta, sparkline, status
 └── lib/
+    ├── handball/             Event taxonomy, video clock, controlled vocabularies
     ├── integrations/         Adapter registry: tugg/, google_health/
+    ├── labels.ts             Display names for session types and sources
     ├── services/             dailyFacts, loadMetrics, trainingLoad, readiness*, sessionMerge, syncOrchestrator
     ├── validation/           Zod schemas + shared server-action state
+    ├── video/handleStore.ts  IndexedDB store for FileSystemFileHandles
     └── supabase/             Browser/server/service-role clients, generated types
 ```
+
+**Every screen that shows load reads `daily_facts.load_estimate`**, never
+`sessions.rpe` directly. Computing load anywhere else produces a second,
+quieter definition that silently disagrees — which is exactly what `/training-load`
+used to do, ignoring `manual_rpe` entirely and reporting most training days as
+rest days.
+
+Charts go through `TrendChart`. It takes a serializable `format` descriptor
+rather than a formatter function, because chart callers are server components
+and a function prop cannot cross the boundary.
 
 ### Integrations
 
@@ -115,9 +135,13 @@ Both sources implement `SourceAdapter.sync(account, db)` and are registered in
 
 - **TUGG** reads its Supabase project directly via PostgREST. Currently a full
   table pull each run — see the roadmap for the incremental-cursor plan.
-- **Google Health** fetches 10 data types over a 30-day window with
+  Exercise-name lookups are memoised per run, so the same lifts recurring across
+  every session cost one query each rather than one per session.
+- **Google Health** fetches 9 data types over a 30-day window with
   `Promise.allSettled`, so a single failing endpoint degrades the run to
-  `partial` with warnings rather than failing outright.
+  `partial` with warnings rather than failing outright. A metric is written only
+  on the days it actually returned a value — sending `null` for the rest would
+  blank good data across the whole window whenever a fetch failed.
 
 Sync runs are recorded in `sync_runs` and visible at `/sync`, which also has a
 manual trigger.

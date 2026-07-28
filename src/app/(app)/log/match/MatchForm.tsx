@@ -1,9 +1,12 @@
 "use client"
 
+import Link from "next/link"
 import { useActionState } from "react"
+import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
 import { Field, FieldError, FormAlert, SubmitButton, fieldValue } from "@/components/forms/FormParts"
 import { idleState } from "@/lib/validation/formState"
 import { logMatch, updateMatch } from "./actions"
@@ -13,21 +16,6 @@ function nowLocalDatetime() {
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
   return now.toISOString().slice(0, 16)
 }
-
-const statFields: Array<{ name: string; label: string }> = [
-  { name: "goals", label: "Goals" },
-  { name: "assists", label: "Assists" },
-  { name: "shots_missed", label: "Shots missed" },
-  { name: "shots_saved", label: "Shots saved (by keeper)" },
-  { name: "nine_m_shots", label: "9m shots" },
-  { name: "breakthroughs", label: "Breakthroughs" },
-  { name: "technical_faults", label: "Technical faults" },
-  { name: "suspensions_created", label: "Suspensions won" },
-  { name: "suspensions_received", label: "Suspensions received (2 min)" },
-  { name: "steals", label: "Steals" },
-  { name: "blocks", label: "Blocks" },
-  { name: "big_mistakes", label: "Big mistakes" },
-]
 
 const ratingFields: Array<{ name: string; label: string; max: number }> = [
   { name: "importance", label: "Importance (1-10)", max: 10 },
@@ -49,28 +37,19 @@ export interface MatchDefaults {
   perceived_challenge: number | null
   rpe: number | null
   comments: string | null
-  goals: number
-  assists: number
-  shots_missed: number
-  shots_saved: number
-  nine_m_shots: number
-  breakthroughs: number
-  technical_faults: number
-  suspensions_created: number
-  suspensions_received: number
-  steals: number
-  blocks: number
-  big_mistakes: number
 }
 
 export function MatchForm({
   mode,
   sessionId,
   defaultValues,
+  eventCount = 0,
 }: {
   mode: "create" | "edit"
   sessionId?: string
   defaultValues?: MatchDefaults
+  /** Events already tagged, so the edit form can point at the review page. */
+  eventCount?: number
 }) {
   const action = mode === "edit" ? updateMatch.bind(null, sessionId!) : logMatch
   const [state, formAction] = useActionState(action, idleState)
@@ -157,24 +136,23 @@ export function MatchForm({
         ))}
       </div>
 
-      <div className="border-t pt-4">
-        <p className="mb-2 text-sm font-medium">Box score</p>
-        <div className="grid grid-cols-2 gap-4">
-          {statFields.map((field) => (
-            <Field key={field.name} name={field.name} label={field.label} state={state}>
-              <Input
-                id={field.name}
-                name={field.name}
-                type="number"
-                min={0}
-                defaultValue={v(
-                  field.name,
-                  (defaultValues?.[field.name as keyof MatchDefaults] as number | undefined) ?? 0
-                )}
-              />
-            </Field>
-          ))}
-        </div>
+      {/* The box score is no longer typed here - it is counted from the events
+          tagged against the video, so there is nothing to keep in sync. */}
+      <div className="flex flex-col gap-2 rounded-md border border-dashed p-4 text-sm">
+        <p className="font-medium">Box score</p>
+        <p className="text-muted-foreground">
+          {mode === "edit" && eventCount > 0
+            ? `Counted from ${eventCount} tagged event${eventCount === 1 ? "" : "s"}.`
+            : "Tag goals, assists and mistakes against the video after the match - the box score is counted from them."}
+        </p>
+        {mode === "edit" && sessionId && (
+          <Link
+            href={`/sessions/${sessionId}/review`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "self-start")}
+          >
+            {eventCount > 0 ? "Review video" : "Tag events from video"}
+          </Link>
+        )}
       </div>
 
       <Field name="comments" label="Notes (mental state, how it felt, etc.)" state={state}>

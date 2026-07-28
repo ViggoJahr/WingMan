@@ -20,11 +20,13 @@ function ChartTooltip({
   payload,
   label,
   format,
+  labelPrefix = "",
 }: {
   active?: boolean
   payload?: ReadonlyArray<{ value?: unknown }>
   label?: unknown
   format?: ValueFormat
+  labelPrefix?: string
 }) {
   const value = payload?.[0]?.value
   if (!active || typeof value !== "number") return null
@@ -32,7 +34,9 @@ function ChartTooltip({
   return (
     <div className="rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
       <p className="font-semibold text-foreground">{formatValue(value, format)}</p>
-      <p className="text-muted-foreground">{label ? formatDate(String(label)) : ""}</p>
+      <p className="text-muted-foreground">
+        {label ? `${labelPrefix}${formatDate(String(label))}` : ""}
+      </p>
     </div>
   )
 }
@@ -49,12 +53,23 @@ export interface TrendChartProps {
   format?: ValueFormat
   yDomain?: [number | string, number | string]
   height?: number
+  /** Prefixes the tooltip's date line, e.g. "Week of " for a weekly rollup. */
+  labelPrefix?: string
 }
 
 const AXIS_TICK = { fill: "var(--muted-foreground)", fontSize: 12 }
 
-export function TrendChart({ data, kind, color, format, yDomain, height = 240 }: TrendChartProps) {
+export function TrendChart({
+  data,
+  kind,
+  color,
+  format,
+  yDomain,
+  height = 240,
+  labelPrefix,
+}: TrendChartProps) {
   const stroke = `var(--${color})`
+  const tooltip = <ChartTooltip format={format} labelPrefix={labelPrefix} />
 
   const grid = <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
   const xAxis = (
@@ -77,7 +92,7 @@ export function TrendChart({ data, kind, color, format, yDomain, height = 240 }:
           {grid}
           {xAxis}
           <YAxis domain={yDomain} tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} />
-          <Tooltip content={<ChartTooltip format={format} />} cursor={{ fill: "var(--muted)" }} />
+          <Tooltip content={tooltip} cursor={{ fill: "var(--muted)" }} />
           <Bar dataKey="value" fill={stroke} radius={[4, 4, 0, 0]} maxBarSize={20} />
         </BarChart>
       </ResponsiveContainer>
@@ -96,7 +111,7 @@ export function TrendChart({ data, kind, color, format, yDomain, height = 240 }:
           tickLine={false}
           width={40}
         />
-        <Tooltip content={<ChartTooltip format={format} />} cursor={{ stroke: "var(--border)" }} />
+        <Tooltip content={tooltip} cursor={{ stroke: "var(--border)" }} />
         <Line
           type="monotone"
           dataKey="value"

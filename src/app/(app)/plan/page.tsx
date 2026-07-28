@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Pagination, pageParam, paginationRange, splitPage } from "@/components/Pagination"
 import { createClient } from "@/lib/supabase/server"
 import { cn } from "@/lib/utils"
 
@@ -69,21 +70,25 @@ export default async function PlanPage({
 }: {
   searchParams: Promise<{ type?: string; page?: string }>
 }) {
-  const { type, page: pageParam } = await searchParams
+  const { type, page: rawPage } = await searchParams
   const supabase = await createClient()
-  const page = Math.max(0, Number(pageParam ?? 0))
+  const page = pageParam(rawPage)
 
   let query = supabase
     .from("external_plan_items")
     .select("id, resource_type, payload, synced_at")
     .order("synced_at", { ascending: false })
-    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
+    .range(...paginationRange(page, PAGE_SIZE))
 
   if (type) query = query.eq("resource_type", type)
 
   const { data: rows } = await query
-  const hasNext = (rows ?? []).length > PAGE_SIZE
-  const items = (rows ?? []).slice(0, PAGE_SIZE)
+  const { items, hasNext } = splitPage(rows, PAGE_SIZE)
+  const pageLink = (newPage: number) =>
+    `/plan?${new URLSearchParams({
+      ...(type ? { type } : {}),
+      ...(newPage > 0 ? { page: String(newPage) } : {}),
+    })}`
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
@@ -140,20 +145,7 @@ export default async function PlanPage({
           </CardContent>
         </Card>
 
-        <div className="flex justify-between text-sm">
-          {page > 0 ? (
-            <Link href={`/plan?${type ? `type=${type}&` : ""}page=${page - 1}`} className="underline">
-              Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          {hasNext && (
-            <Link href={`/plan?${type ? `type=${type}&` : ""}page=${page + 1}`} className="underline">
-              Next
-            </Link>
-          )}
-        </div>
+        <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
       </div>
   )
 }

@@ -109,14 +109,11 @@ export const fetchSleep = (accessToken: string, since: Date) =>
 export const fetchRestingHeartRate = (accessToken: string, since: Date) =>
   fetchAndFilterSince(accessToken, "daily-resting-heart-rate", "dailyRestingHeartRate", since)
 
-// Newly added (2026-07-25): body fat and height are sample-based like
-// weight; HRV, SpO2, and active-zone-minutes are high-frequency and
-// bucketed to daily averages/sums downstream in normalize.ts.
+// Body fat is sample-based like weight; HRV, SpO2 and active-zone-minutes are
+// high-frequency and bucketed to daily averages/sums downstream in normalize.ts.
+// `height` is offered by the API but deliberately not fetched - see normalize.ts.
 export const fetchBodyFat = (accessToken: string, since: Date) =>
   fetchAndFilterSince(accessToken, "body-fat", "bodyFat", since)
-
-export const fetchHeight = (accessToken: string, since: Date) =>
-  fetchAndFilterSince(accessToken, "height", "height", since)
 
 export const fetchHeartRateVariability = (accessToken: string, since: Date) =>
   fetchAndFilterSince(accessToken, "heart-rate-variability", "heartRateVariability", since)

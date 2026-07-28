@@ -1,12 +1,8 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/server"
+import { sourceLabel } from "@/lib/labels"
 import { triggerSync } from "./actions"
-
-const SOURCE_LABEL: Record<string, string> = {
-  tugg: "TUGG",
-  google_health: "Google Health",
-}
 
 const STATUS_STYLE: Record<string, string> = {
   success: "text-[color:var(--chart-3)]",
@@ -73,7 +69,7 @@ export default async function SyncPage({
                         ?.source
                       return (
                         <tr key={run.id}>
-                          <td className="py-1 pr-4">{SOURCE_LABEL[source ?? ""] ?? source ?? "-"}</td>
+                          <td className="py-1 pr-4">{source ? sourceLabel(source) : "-"}</td>
                           <td className={`py-1 pr-4 font-medium ${STATUS_STYLE[run.status] ?? ""}`}>
                             {run.status}
                           </td>

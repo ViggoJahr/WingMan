@@ -2,19 +2,9 @@
 
 import { useState, useTransition } from "react"
 import { cn } from "@/lib/utils"
+import { CHIP_BASE, CHIP_OFF, CHIP_ON } from "@/components/forms/ChipGroup"
+import { RPE_CHOICES } from "@/lib/rpe"
 import { setManualRpe } from "@/app/(app)/sessions/[id]/actions"
-
-// Borg 6-20 descriptors, collapsed to the handful of steps worth distinguishing
-// after the fact. Asking "how hard was that, roughly" days later is only ever
-// going to be approximate, so offering all 20 values would be false precision.
-const CHOICES: Array<{ value: number; label: string; hint: string }> = [
-  { value: 8, label: "Very easy", hint: "recovery, barely noticed it" },
-  { value: 11, label: "Easy", hint: "comfortable, could talk freely" },
-  { value: 13, label: "Moderate", hint: "working, but sustainable" },
-  { value: 15, label: "Hard", hint: "breathing heavily, talking is an effort" },
-  { value: 17, label: "Very hard", hint: "near maximal, couldn't hold it long" },
-  { value: 19, label: "Maximal", hint: "everything I had" },
-]
 
 export function RpeQuickSet({
   sessionId,
@@ -57,7 +47,7 @@ export function RpeQuickSet({
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        {CHOICES.map((choice) => (
+        {RPE_CHOICES.map((choice) => (
           <button
             key={choice.value}
             type="button"
@@ -65,12 +55,7 @@ export function RpeQuickSet({
             disabled={pending}
             title={`RPE ${choice.value} - ${choice.hint}`}
             aria-pressed={selected === choice.value}
-            className={cn(
-              "rounded-md border px-2.5 py-1 text-xs transition-colors",
-              selected === choice.value
-                ? "border-transparent bg-primary text-primary-foreground font-medium"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground"
-            )}
+            className={cn(CHIP_BASE, selected === choice.value ? CHIP_ON : CHIP_OFF)}
           >
             {choice.label}
           </button>

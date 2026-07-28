@@ -97,9 +97,10 @@ function round(value: number, places: number): number {
 
 /**
  * Assumes `points` is sorted ascending and dense - exactly one entry per
- * calendar day, including rest days at load 0. The daily_facts view
- * guarantees this by generating a full calendar; use `densify` first if the
- * series came from somewhere else.
+ * calendar day, including rest days at load 0. Every caller reads daily_facts,
+ * which guarantees this by generating a full calendar, so nothing here has to
+ * fill gaps: the windows below can slice by index and still line up with real
+ * elapsed time.
  */
 export function computeLoadMetrics(points: DailyLoadPoint[]): LoadMetricsPoint[] {
   const loads = points.map((p) => p.load)
@@ -131,23 +132,4 @@ export function computeLoadMetrics(points: DailyLoadPoint[]): LoadMetricsPoint[]
 
     return { day: point.day, load: point.load, acute, chronic, acwr, monotony, strain }
   })
-}
-
-/**
- * Fills missing calendar days with load 0 so the rolling windows above line up
- * with real elapsed time rather than "the last N rows that happened to exist".
- */
-export function densify(points: DailyLoadPoint[], from: string, to: string): DailyLoadPoint[] {
-  const byDay = new Map(points.map((p) => [p.day, p.load]))
-  const out: DailyLoadPoint[] = []
-  const cursor = new Date(`${from}T00:00:00Z`)
-  const end = new Date(`${to}T00:00:00Z`)
-
-  while (cursor <= end) {
-    const day = cursor.toISOString().slice(0, 10)
-    out.push({ day, load: byDay.get(day) ?? 0 })
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
-  }
-
-  return out
 }

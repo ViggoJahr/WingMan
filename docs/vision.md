@@ -1,7 +1,7 @@
 # Training Hub — Vision & Roadmap
 
 Living document. Captures where this project is going and why, so the reasoning
-isn't scattered across commit messages. Last updated 2026-07-25.
+isn't scattered across commit messages. Last updated 2026-07-28.
 
 ---
 
@@ -99,6 +99,14 @@ on `daily_facts`?"
 - **Foundation**: database indexes, bounded merge window, error/loading
   boundaries, Zod validation on every form with inline errors and preserved
   input.
+- **Match video review**: `/sessions/[id]/review` — keyboard tagging against
+  local video, per-event writes, derived box score. See the note at the bottom.
+- **CI**: `.github/workflows/ci.yml` runs `check` + `build` on push and PR.
+- **One definition of load.** `/training-load` recomputed weekly load from
+  `sessions.rpe` itself, which ignored `manual_rpe` and counted an unrated
+  session as zero — so it contradicted the dashboard tile that links to it, and
+  every RPE entered by hand was invisible there. It reads `daily_facts` now, and
+  `trainingLoad.ts` only buckets days into ISO weeks.
 
 ### Medium term
 
@@ -108,6 +116,13 @@ backfilled, so they should start early even if polish lags.
 #### 1. Shot and match event tracking
 
 The largest new capture surface and the highest-value one.
+
+> **Superseded in part — built as `match_events`, not `shots`.** A shot *is* a
+> match event, and two tables would mean two timelines to merge in the clip
+> library. `match_events` carries `event_type` (the outcome), `shot_origin` (the
+> separate origin dimension), `phase`, and nullable `court_x` / `court_y` /
+> `goal_cell` columns that nothing writes yet. So everything below still holds —
+> it is now UI work on an existing table rather than a new migration.
 
 A `shots` table: `match_id`, `match_minute`, `court_x` / `court_y` (metres on a
 40×20 court), derived `court_zone`, `goal_cell` (1–9, null when off target),
@@ -172,14 +187,15 @@ Google rollUp POST on every single session-detail page view, and stores nothing.
   component.
 - `DataTable`: sortable columns, column visibility, CSV export. Replaces the two
   hand-rolled `<table>` blocks in `handball/page.tsx` and `sync/page.tsx`.
-- Extract the pagination helper duplicated verbatim in `history/page.tsx` and
-  `plan/page.tsx`; unify the two incompatible filter UIs.
+- Unify the two incompatible filter UIs on `/history` and `/plan`. *(The
+  duplicated pagination block is done — `components/Pagination.tsx`.)*
 - **`/explore`**: the spreadsheet view over `daily_facts` with a column picker,
   date range, sort and export. Falls out of the keystone view almost free.
-- Consolidate charts: `training-load/chart.tsx` and `readiness/chart.tsx` are
-  near-copies of `TrendChart`'s branches, and five near-identical tooltip
-  components exist. Extend `TrendChart` with multi-series, an area kind,
-  `className` passthrough and a shared empty state.
+- Extend `TrendChart` with multi-series, an area kind and a shared empty state.
+  *(The two near-copies of it are gone — `training-load/chart.tsx` and
+  `readiness/chart.tsx` were deleted and both callers now use `TrendChart`
+  itself. `handball/chart.tsx` survives because it is genuinely multi-series,
+  which is the feature above.)*
 
 #### 4. The performance model
 
@@ -210,16 +226,20 @@ the preceding 3 / 7 / 28 days, ACWR, days since last match, kickoff time of day.
 - **TUGG incremental sync.** `fetchAll` is `select("*")` across 10 tables with
   no filter, cursor or pagination, run nightly. Supabase's default 1,000-row
   PostgREST cap means it will *silently truncate* rather than error once any
-  table grows past it. Add a cursor mirroring Google Health's
-  `SYNC_WINDOW_DAYS`, batch the writes, and cache exercise-name lookups
-  (`findOrCreateExercise` issues a SELECT per exercise per session).
-- **CI.** No `.github/` exists. A workflow running `npm run check` (lint +
-  typecheck + test) and `build` on push.
+  table grows past it. **This is now the largest known correctness risk in the
+  repo** — it fails quietly and gets worse with every session logged. Add a
+  cursor mirroring Google Health's `SYNC_WINDOW_DAYS` and batch the writes.
+  *(Exercise-name lookups are memoised per run now.)*
 - **Tests** for `sessionMerge` (the subtlest code in the repo, and it mutates
-  data), the server actions, and both adapter write paths.
-- **TUGG connect UI.** `signInToTugg()` exists but is never called — the
-  `integration_accounts` row was inserted by hand. `/settings` only offers
-  Google Health.
+  data), the server actions, and both adapter write paths. The suite is pure
+  functions only by design — no DB harness — so these need either a fake
+  `SupabaseClient` or a decision to relax that constraint.
+- **Persist the running score properly.** The review UI snapshots `score_us` /
+  `score_them` onto each event as it is tagged, and the box-score view takes
+  `MAX()` over them. That means an opponent goal after the last tagged event is
+  never recorded, and deleting a tagged goal does not decrement the count. Good
+  enough while tagging is the only writer; wrong the moment anything else reads
+  the score as authoritative.
 
 ---
 
@@ -268,8 +288,13 @@ than inferred from docs. Platform reports as **FITBIT**.
 `heart-rate-variability`, `oxygen-saturation`, `active-zone-minutes`, `weight`,
 `body-fat`, `height`, `heart-rate`.
 
-All are synced except raw `heart-rate`, which is fetched on demand per session
-view and never persisted — see medium-term item 2.
+Nine of the eleven are synced. The two that are not:
+
+- **`heart-rate`** — fetched on demand per session view and never persisted. See
+  medium-term item 2; this is the highest-value gap.
+- **`height`** — deliberately dropped. It is recorded once and never changes, so
+  the source record always falls outside the 30-day sync window (0 of 24
+  `body_metrics` rows ever received one). It is a profile field in Settings now.
 
 **Valid types but empty for this device:** `vo2-max`, `blood-glucose`,
 `distance`.
@@ -338,6 +363,11 @@ What is established:
   module, so server components can call it too.
 - `/training-load` renders its charts correctly (2 surfaces, 9 bars measured),
   so **Recharts itself works** under React 19 here.
+- **This check got cheaper on 2026-07-28.** `/training-load` and `/readiness`
+  used to have their own chart components, so their rendering said nothing about
+  `TrendChart`. Both now go through `TrendChart` itself — so if the bars still
+  render on `/training-load`, the component is fine and any blankness on
+  `/health` is a sizing problem specific to those cards, not the chart.
 - `/health` appeared to render cards and data but no chart SVG. However, the
   DOM measurements behind that conclusion are untrustworthy: every element on
   the page reported `getBoundingClientRect()` of 0×0, including card titles
@@ -379,9 +409,10 @@ relevant page is next touched:
 | Data | Status |
 |---|---|
 | `injuries` (whole table) | Never read or written by any screen |
-| `body_metrics.body_fat_percentage`, `height_cm` | Synced from Google Health, never charted |
+| `body_metrics.body_fat_percentage` | Synced from Google Health, carried on `daily_facts`, never charted |
+| `body_metrics.height_cm` | Dead column. Height is `users.height_cm`, entered in Settings — the sync and its normaliser were removed, since the value is recorded once and so always falls outside the window |
 | `sleep_logs.sleep_stages` | Stored as jsonb; only total hours shown |
-| `handball_sessions.throws_count` | Column exists, no form or view |
+| `handball_sessions.throws_count` | Written by the practice form as a band midpoint; shown on session detail, not yet trended |
 | 9 of 16 match stats | Enterable and shown per-session, never trended |
 | `strength_test_results.verification_status` | Stored, not selected by `/tests` |
 | `sessions.surface` | Displayed on session detail; no form writes it |
@@ -392,5 +423,13 @@ relevant page is next touched:
 
 
 New Idea, I want to clip my games. So I can log timestamps from each game, that same timestamp is then answering all the topics about my performance (So I can sit in a video-preview. In that preview I can clip videos)
+
+> **Built** — `/sessions/[id]/review`. Tag against the video with the keyboard;
+> every tag stores a video offset plus the derived period and match clock, and
+> the clip list seeks straight back to any moment. The video itself stays on the
+> machine: Postgres holds the tags and a `handle_key`, the browser holds the
+> `FileSystemFileHandle` in IndexedDB, so a return visit costs at most one click.
+> Box-score counters are derived from the events (`deriveBoxScore`, and the
+> `match_box_score` view once the backfill lands) rather than typed twice.
 
 I also consider integrating the games from profixio. I could use the stats from there? Or use the visual aspects? Not certain if I will use it.

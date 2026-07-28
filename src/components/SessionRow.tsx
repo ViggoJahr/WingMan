@@ -1,18 +1,5 @@
 import Link from "next/link"
-
-export const SESSION_TYPE_LABEL: Record<string, string> = {
-  strength_power: "Strength",
-  cardio: "Cardio",
-  general_cardio: "Other activity",
-  mobility_rehab: "Mobility/Rehab",
-  active_rest: "Active rest",
-  handball: "Handball",
-}
-
-export const SOURCE_LABEL: Record<string, string> = {
-  tugg: "TUGG",
-  google_health: "Google Health",
-}
+import { sessionTypeLabel, sourceLabel } from "@/lib/labels"
 
 export interface SessionRowData {
   id: string
@@ -39,10 +26,10 @@ export function SessionRow({ session }: { session: SessionRowData }) {
     >
       <div>
         <p className="font-medium">
-          {focus ?? SESSION_TYPE_LABEL[session.type] ?? session.type}
+          {focus ?? sessionTypeLabel(session.type)}
           {session.external_source && (
             <span className="ml-2 text-xs text-muted-foreground">
-              via {SOURCE_LABEL[session.external_source] ?? session.external_source}
+              via {sourceLabel(session.external_source)}
             </span>
           )}
         </p>
