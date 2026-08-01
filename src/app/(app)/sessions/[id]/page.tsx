@@ -232,7 +232,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             <CardTitle>Heart rate during this session</CardTitle>
           </CardHeader>
           <CardContent>
-            <HeartRateChart startTime={session.start_time} endTime={session.end_time!} />
+            <HeartRateChart
+              sessionId={id}
+              startTime={session.start_time}
+              endTime={session.end_time!}
+            />
           </CardContent>
         </Card>
       )}

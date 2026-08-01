@@ -124,7 +124,13 @@ export const fetchOxygenSaturation = (accessToken: string, since: Date) =>
 export const fetchActiveZoneMinutes = (accessToken: string, since: Date) =>
   fetchAndFilterSince(accessToken, "active-zone-minutes", "activeZoneMinutes", since)
 
-export interface HeartRateRollupBucket {
+/**
+ * A type alias rather than an interface on purpose: these buckets are stored
+ * as jsonb on `sessions.hr_timeline`, and the generated `Json` type requires an
+ * index signature. TypeScript gives type aliases an implicit one and interfaces
+ * none, so an interface here would need a cast at every write.
+ */
+export type HeartRateRollupBucket = {
   startTime: string
   endTime: string
   avg: number

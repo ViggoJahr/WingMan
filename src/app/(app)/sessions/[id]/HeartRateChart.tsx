@@ -41,13 +41,21 @@ function HrTooltip({
 
 type ChartPoint = HeartRateRollupBucket & { range: [number, number] }
 
-export function HeartRateChart({ startTime, endTime }: { startTime: string; endTime: string }) {
+export function HeartRateChart({
+  sessionId,
+  startTime,
+  endTime,
+}: {
+  sessionId: string
+  startTime: string
+  endTime: string
+}) {
   const [state, setState] = useState<"loading" | "empty" | "error" | "ready">("loading")
   const [buckets, setBuckets] = useState<ChartPoint[]>([])
 
   useEffect(() => {
     let cancelled = false
-    getHeartRateTimeline(startTime, endTime)
+    getHeartRateTimeline(sessionId, startTime, endTime)
       .then((result) => {
         if (cancelled) return
         if (!result || result.length === 0) {
@@ -63,7 +71,7 @@ export function HeartRateChart({ startTime, endTime }: { startTime: string; endT
     return () => {
       cancelled = true
     }
-  }, [startTime, endTime])
+  }, [sessionId, startTime, endTime])
 
   if (state === "loading") {
     return <p className="text-sm text-muted-foreground">Loading heart rate...</p>

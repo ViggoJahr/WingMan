@@ -171,8 +171,17 @@ turn is the difference between ACWR being displayable and not.
 `getHeartRateTimeline` currently does a fresh OAuth token exchange **and** a
 Google rollUp POST on every single session-detail page view, and stores nothing.
 
-- Cache buckets into a `session_hr_samples` table (or a `sessions.hr_timeline`
-  jsonb column). Fetch once, serve locally forever.
+- ~~Cache buckets~~ **Done 2026-08-01** as `sessions.hr_timeline` jsonb plus
+  `hr_timeline_fetched_at`. A child table would have added a join and an index
+  to serve a query nobody makes — the payload is ~80 buckets, read whole, for
+  one session. The timestamp is what makes the *negative* case cacheable: a
+  session Google has no samples for would otherwise be re-fetched on every view,
+  which is the behaviour being removed.
+- **The derivation is deliberately still pending.** Turning this into TRIMP, or
+  into a new `load_estimate` tier, moves the load figure for most historical
+  sessions — and with it every ACWR band, heatmap cell and dashboard tile. It
+  has to be its own reviewable change, made after the cache is populated and
+  spot-checked against sessions whose effort is known.
 - With HR persisted, derive **TRIMP** as an objective load metric alongside
   session-RPE. Where the two disagree is real signal about perception vs
   physiology.
@@ -223,17 +232,24 @@ the preceding 3 / 7 / 28 days, ACWR, days since last match, kickoff time of day.
 
 #### 5. Remaining hardening
 
-- **TUGG incremental sync.** `fetchAll` is `select("*")` across 10 tables with
-  no filter, cursor or pagination, run nightly. Supabase's default 1,000-row
-  PostgREST cap means it will *silently truncate* rather than error once any
-  table grows past it. **This is now the largest known correctness risk in the
-  repo** — it fails quietly and gets worse with every session logged. Add a
-  cursor mirroring Google Health's `SYNC_WINDOW_DAYS` and batch the writes.
-  *(Exercise-name lookups are memoised per run now.)*
-- **Tests** for `sessionMerge` (the subtlest code in the repo, and it mutates
-  data), the server actions, and both adapter write paths. The suite is pure
-  functions only by design — no DB harness — so these need either a fake
-  `SupabaseClient` or a decision to relax that constraint.
+- ~~**TUGG incremental sync.**~~ **Done 2026-08-01.** `fetchAll` now pages
+  through with `.range()`, ordered by `id` so a row cannot land on two pages or
+  none. Deliberately *without* the suggested `SYNC_WINDOW_DAYS` cursor: paging
+  is what fixes the bug, and a window trades correctness for a saving that does
+  not exist yet — the largest sync so far moved 326 rows, `exercise_progress`
+  has no event date to filter on, and a window silently skips rows edited after
+  they age out, which is the same class of quiet wrongness. `fetchPaged` takes a
+  `since` option for when volume justifies it.
+- **Tests.** The suite was pure-functions-only by design, which left
+  `sessionMerge` — the subtlest code here, and the only code that *mutates*
+  data — entirely uncovered. **That constraint is now relaxed**, via a minimal
+  fake PostgREST builder in `tests/support/fakeSupabase.ts`. It implements only
+  the operators `sessionMerge` uses, so it cannot drift into a half-built ORM.
+  Fifteen cases cover the richness rule, the hand-entered-detail override, the
+  merge window and the backfill; they were mutation-tested (inverting the
+  richness comparison fails 8, removing the same-source guard fails 9) to
+  confirm they have teeth. Still open: the server actions and both adapter
+  write paths.
 - **Persist the running score properly.** The review UI snapshots `score_us` /
   `score_them` onto each event as it is tagged, and the box-score view takes
   `MAX()` over them. That means an opponent goal after the last tagged event is

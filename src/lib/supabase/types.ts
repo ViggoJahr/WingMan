@@ -726,6 +726,8 @@ export type Database = {
           end_time: string | null
           external_id: string | null
           external_source: string | null
+          hr_timeline: Json | null
+          hr_timeline_fetched_at: string | null
           hr_zones: Json | null
           id: string
           location: string | null
@@ -745,6 +747,8 @@ export type Database = {
           end_time?: string | null
           external_id?: string | null
           external_source?: string | null
+          hr_timeline?: Json | null
+          hr_timeline_fetched_at?: string | null
           hr_zones?: Json | null
           id?: string
           location?: string | null
@@ -764,6 +768,8 @@ export type Database = {
           end_time?: string | null
           external_id?: string | null
           external_source?: string | null
+          hr_timeline?: Json | null
+          hr_timeline_fetched_at?: string | null
           hr_zones?: Json | null
           id?: string
           location?: string | null
