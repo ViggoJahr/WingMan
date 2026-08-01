@@ -17,6 +17,7 @@ import {
   CalendarDays,
   Dumbbell,
   Gauge,
+  HeartCrack,
   HeartPulse,
   Home,
   ListFilter,
@@ -47,6 +48,7 @@ export const ROUTES: readonly AppRoute[] = [
   { href: "/handball", label: "Handball", icon: Target, group: "trends" },
   { href: "/health", label: "Body & recovery", icon: HeartPulse, group: "trends" },
   { href: "/tests", label: "Tests", icon: Dumbbell, group: "trends" },
+  { href: "/injuries", label: "Injuries", icon: HeartCrack, group: "trends" },
 
   { href: "/plan", label: "Plan", icon: CalendarDays, group: "reference" },
 

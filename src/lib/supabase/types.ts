@@ -619,25 +619,34 @@ export type Database = {
         Row: {
           importance: number | null
           is_home: boolean | null
+          minutes_period_1: number | null
+          minutes_period_2: number | null
           opponent: string | null
           opposition_difficulty: number | null
           play_time_min: number | null
+          plus_minus: number | null
           session_id: string
         }
         Insert: {
           importance?: number | null
           is_home?: boolean | null
+          minutes_period_1?: number | null
+          minutes_period_2?: number | null
           opponent?: string | null
           opposition_difficulty?: number | null
           play_time_min?: number | null
+          plus_minus?: number | null
           session_id: string
         }
         Update: {
           importance?: number | null
           is_home?: boolean | null
+          minutes_period_1?: number | null
+          minutes_period_2?: number | null
           opponent?: string | null
           opposition_difficulty?: number | null
           play_time_min?: number | null
+          plus_minus?: number | null
           session_id?: string
         }
         Relationships: [

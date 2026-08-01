@@ -259,6 +259,42 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         </Card>
       )}
 
+      {/* A session the sync detected as handball but knows nothing about. It has
+          neither a match nor a practice row, so this cannot live inside the
+          detail card below - that card only renders once one of them exists,
+          which is exactly what this offers to create.
+
+          Describing it here is what stops a duplicate being logged by hand, and
+          sessionMerge cannot clean that up: it only merges across differing
+          external sources, and a hand-logged session has none. */}
+      {handball?.subtype === "individual" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Detected handball session</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 text-sm">
+            <p className="text-muted-foreground">
+              Your watch recorded this but not what it was. Add the detail here rather than logging
+              it again - the timing stays as measured.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/sessions/${id}/attach?as=practice`}
+                className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              >
+                It was a practice
+              </Link>
+              <Link
+                href={`/sessions/${id}/attach?as=match`}
+                className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+              >
+                It was a match
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {(match || practice) && (
         <Card>
           <CardHeader>

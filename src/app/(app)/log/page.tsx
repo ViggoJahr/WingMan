@@ -7,6 +7,7 @@ const LOG_TYPES = [
   { href: "/log/match", title: "Match", description: "Full box score and opponent detail" },
   { href: "/log/workout", title: "Workout", description: "Gym or cardio session not covered by sync" },
   { href: "/log/readiness", title: "Readiness check-in", description: "Daily wellness questionnaire" },
+  { href: "/log/injury", title: "Injury", description: "What, when, and how much it stopped you" },
 ]
 
 export default function LogHubPage() {

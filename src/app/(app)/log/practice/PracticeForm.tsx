@@ -17,7 +17,7 @@ import {
   PRACTICE_FOCUS_OPTIONS,
   THROW_BANDS,
 } from "@/lib/handball/vocab"
-import { logPractice, updatePractice } from "./actions"
+import { attachPractice, logPractice, updatePractice } from "./actions"
 
 function nowLocalDatetime() {
   const now = new Date()
@@ -69,13 +69,24 @@ export function PracticeForm({
   defaultValues,
   defaultPosition,
 }: {
-  mode: "create" | "edit"
+  /**
+   * "attach" fills in detail on a session the watch already detected. Timing
+   * comes from the sync and is left alone, so those fields ride along as hidden
+   * inputs purely to satisfy the shared schema.
+   */
+  mode: "create" | "edit" | "attach"
   sessionId?: string
   defaultValues?: PracticeDefaults
   /** Position from the most recent handball session, so the usual case is zero taps. */
   defaultPosition?: string | null
 }) {
-  const action = mode === "edit" ? updatePractice.bind(null, sessionId!) : logPractice
+  const isAttach = mode === "attach"
+  const action =
+    mode === "edit"
+      ? updatePractice.bind(null, sessionId!)
+      : isAttach
+        ? attachPractice.bind(null, sessionId!)
+        : logPractice
   const [state, formAction] = useActionState(action, idleState)
   const v = (name: string, fallback: string | number | null | undefined) =>
     fieldValue(state, name, fallback)
@@ -88,14 +99,28 @@ export function PracticeForm({
     <form action={formAction} className="flex flex-col gap-5">
       <FormAlert state={state} />
 
-      <Field name="duration_minutes" label="How long?" state={state}>
-        <ChipGroup
-          name="duration_minutes"
-          options={durationOptions(defaultValues?.duration_minutes)}
-          defaultValue={v("duration_minutes", defaultValues?.duration_minutes ?? 90)}
-          clearable={false}
-        />
-      </Field>
+      {isAttach ? (
+        <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          Attaching to a session your watch already recorded -{" "}
+          <span className="text-foreground">{defaultValues?.duration_minutes} min</span>. Its timing
+          stays as measured; you just add what it was.
+          <input
+            type="hidden"
+            name="duration_minutes"
+            value={defaultValues?.duration_minutes ?? 90}
+          />
+          <input type="hidden" name="start_time" value={defaultValues?.start_time ?? ""} />
+        </p>
+      ) : (
+        <Field name="duration_minutes" label="How long?" state={state}>
+          <ChipGroup
+            name="duration_minutes"
+            options={durationOptions(defaultValues?.duration_minutes)}
+            defaultValue={v("duration_minutes", defaultValues?.duration_minutes ?? 90)}
+            clearable={false}
+          />
+        </Field>
+      )}
 
       <Field name="rpe" label="How hard?" state={state}>
         <ChipGroup
@@ -176,15 +201,20 @@ export function PracticeForm({
         </summary>
 
         <div className="mt-3 flex flex-col gap-4">
-          <Field name="start_time" label="Start time" state={state}>
-            <Input
-              id="start_time"
-              name="start_time"
-              type="datetime-local"
-              defaultValue={v("start_time", defaultValues?.start_time ?? nowLocalDatetime())}
-              required
-            />
-          </Field>
+          {/* Omitted when attaching: the hidden input above already carries the
+              measured start time, and offering to edit it would imply the sync
+              would respect the change. It would not. */}
+          {!isAttach && (
+            <Field name="start_time" label="Start time" state={state}>
+              <Input
+                id="start_time"
+                name="start_time"
+                type="datetime-local"
+                defaultValue={v("start_time", defaultValues?.start_time ?? nowLocalDatetime())}
+                required
+              />
+            </Field>
+          )}
 
           <Field name="location" label="Location" state={state}>
             <Input
@@ -237,7 +267,9 @@ export function PracticeForm({
         </div>
       </details>
 
-      <SubmitButton>{mode === "edit" ? "Save changes" : "Save practice"}</SubmitButton>
+      <SubmitButton>
+        {mode === "edit" ? "Save changes" : isAttach ? "Attach practice detail" : "Save practice"}
+      </SubmitButton>
     </form>
   )
 }

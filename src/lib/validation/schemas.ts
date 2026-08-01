@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { HANDBALL_POSITIONS } from "@/lib/handball/vocab"
+import { INJURY_GRADES, INJURY_SITES } from "@/lib/injuries"
 import {
   EVENT_SOURCES,
   MATCH_EVENT_TYPES,
@@ -102,9 +103,18 @@ export const matchSchema = z.object({
   perceived_challenge: optionalInt(1, 10),
   importance: optionalInt(1, 10),
   opposition_difficulty: optionalInt(1, 10),
+  // Splitting the total matters: a half spent on the bench means the opposite
+  // thing depending on which half it was.
+  minutes_period_1: optionalInt(0, 40),
+  minutes_period_2: optionalInt(0, 40),
+  // Team goal difference while on court. Signed, so optionalInt's min is
+  // negative rather than 0.
+  plus_minus: optionalInt(-60, 60),
   // The 12 box-score counters used to live here. They are now derived by
   // counting match_events (see the match_box_score view), so the form no longer
   // collects them and nothing writes the columns.
+  //
+  // Kickoff time of day is likewise absent: start_time already carries it.
 })
 
 export const readinessSchema = z.object({
@@ -120,6 +130,26 @@ export const readinessSchema = z.object({
   mood: requiredInt(0, 10),
   recovery_energy: requiredInt(0, 10),
 })
+
+/**
+ * `injuries.type` and `.grade` are unconstrained varchar in the database - the
+ * table predates this repo and never got CHECKs - so this schema is the only
+ * thing keeping them to a vocabulary. cleared_date is optional because an open
+ * injury has not ended yet, and is checked against injured_date so a typo
+ * cannot produce a negative lay-off.
+ */
+export const injurySchema = z
+  .object({
+    type: z.enum(INJURY_SITES),
+    grade: z.enum(INJURY_GRADES),
+    injured_date: isoDate,
+    cleared_date: z.preprocess(emptyToNull, isoDate.nullable()),
+    description: z.preprocess(emptyToNull, z.string().trim().max(500).nullable()),
+  })
+  .refine((v) => v.cleared_date == null || v.cleared_date >= v.injured_date, {
+    message: "Cleared date can't be before the injury date",
+    path: ["cleared_date"],
+  })
 
 // The review UI sends plain objects over a typed server action rather than
 // FormData, so these need none of the emptyToNull coercion above - the client
@@ -162,6 +192,8 @@ export const matchVideoSchema = z.object({
 
 export type MatchEventInput = z.infer<typeof matchEventSchema>
 export type MatchVideoInput = z.infer<typeof matchVideoSchema>
+
+export type InjuryInput = z.infer<typeof injurySchema>
 
 export type PracticeInput = z.infer<typeof practiceSchema>
 export type WorkoutInput = z.infer<typeof workoutSchema>
