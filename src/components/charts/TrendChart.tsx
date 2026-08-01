@@ -90,7 +90,19 @@ export function TrendChart({
           {xAxis}
           <YAxis domain={yDomain} tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} />
           <Tooltip content={tooltip} cursor={{ fill: "var(--muted)" }} />
-          <Bar dataKey="value" fill={stroke} radius={[4, 4, 0, 0]} maxBarSize={20} />
+          {/* isAnimationActive={false} is load-bearing, not a preference.
+              Under Recharts 3.10 + React 19 the bar entrance animation never
+              completes: every bar stays at height 0, and Rectangle returns null
+              for a zero height, so the chart renders axes, a grid and twelve
+              empty <g> elements. See the note on <Line> below - the same stall
+              affects both, and HeartRateChart already worked around it. */}
+          <Bar
+            dataKey="value"
+            fill={stroke}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={20}
+            isAnimationActive={false}
+          />
         </BarChart>
       </ResponsiveContainer>
     )
@@ -109,12 +121,20 @@ export function TrendChart({
           width={40}
         />
         <Tooltip content={tooltip} cursor={{ stroke: "var(--border)" }} />
+        {/* Entrance animations do not complete under Recharts 3.10 + React 19,
+            and they fail quietly rather than loudly. A line is drawn by
+            animating stroke-dasharray from "0, total" to "total, 0"; the stall
+            leaves it at "92px, 821px", so only the first tenth of the line is
+            painted. Dots are unanimated, which is why a chart with few points
+            still looked plausible - the weight chart was 28 dots joined by a
+            stub. Bars fail the same way at height 0. */}
         <Line
           type="monotone"
           dataKey="value"
           stroke={stroke}
           strokeWidth={2}
           dot={{ r: 4, fill: stroke, stroke: "var(--card)", strokeWidth: 2 }}
+          isAnimationActive={false}
         />
       </LineChart>
     </ResponsiveContainer>

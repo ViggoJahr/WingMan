@@ -348,9 +348,31 @@ Whichever is chosen, the tool layer should read `daily_facts` first and fall
 back to raw tables only for detail the view doesn't carry. Decide before
 building — retrofitting the boundary is the expensive part.
 
-### Needs a human eyeball: do the `/health` and `/tests` charts render?
+### ~~Needs a human eyeball: do the `/health` and `/tests` charts render?~~ **Resolved 2026-08-01**
 
-Investigated 2026-07-25/26 and **not conclusively resolved.** Confirm by simply
+**They did not, and neither did most of the others.** The cause was not sizing
+and not `ResponsiveContainer`: **Recharts 3.10 entrance animations never
+complete under React 19 here**, and they fail silently.
+
+- A `<Bar>` animates height from 0. Stalled at 0, and `Rectangle` returns `null`
+  for a zero height — so a bar chart rendered axes, a grid, and a set of empty
+  `<g>` elements. Weekly load, steps, sleep, active zone minutes and the
+  handball box score were all blank frames.
+- A `<Line>` is drawn by animating `stroke-dasharray` from `0, total` to
+  `total, 0`. Stalled at `92px, 821px`, so only the first tenth was painted.
+  This is why the weight chart looked like 28 dots joined by a stub, and why
+  charts with few points looked plausible enough to pass inspection.
+
+Fixed by `isAnimationActive={false}` on every series in `TrendChart` and
+`handball/chart.tsx`. `HeartRateChart` already carried the same workaround,
+which is the strongest hint that the problem predates this and was met once
+before without being generalised.
+
+The earlier investigation was looking in the wrong place; the 0×0
+`getBoundingClientRect` readings really were a backgrounded-tab artefact, as
+suspected. The original notes follow.
+
+Investigated 2026-07-25/26 and **not conclusively resolved at the time.** Confirm by simply
 looking at `/health` in a normal focused browser tab.
 
 What is established:

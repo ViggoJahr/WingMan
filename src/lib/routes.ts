@@ -43,10 +43,13 @@ export const ROUTES: readonly AppRoute[] = [
   { href: "/history", label: "History", icon: ListFilter, group: "primary" },
   { href: "/log", label: "Log", icon: Plus, group: "primary" },
 
-  { href: "/training-load", label: "Training load", icon: Activity, group: "trends" },
-  { href: "/readiness", label: "Readiness", icon: Gauge, group: "trends" },
+  // The first three are tabs of one page. They stay separate sidebar entries so
+  // the rail keeps its granularity and each view stays deep-linkable; the tab
+  // bar just makes moving between them one click instead of a round trip.
+  { href: "/trends/load", label: "Training load", icon: Activity, group: "trends" },
+  { href: "/trends/readiness", label: "Readiness", icon: Gauge, group: "trends" },
+  { href: "/trends/body", label: "Body & recovery", icon: HeartPulse, group: "trends" },
   { href: "/handball", label: "Handball", icon: Target, group: "trends" },
-  { href: "/health", label: "Body & recovery", icon: HeartPulse, group: "trends" },
   { href: "/tests", label: "Tests", icon: Dumbbell, group: "trends" },
   { href: "/injuries", label: "Injuries", icon: HeartCrack, group: "trends" },
 
@@ -55,6 +58,14 @@ export const ROUTES: readonly AppRoute[] = [
   { href: "/sync", label: "Sync", icon: RefreshCw, group: "account" },
   { href: "/settings", label: "Settings", icon: Settings, group: "account" },
 ]
+
+/**
+ * The /trends tab bar. Derived from ROUTES rather than listed again, so a
+ * renamed tab cannot disagree with the sidebar entry pointing at it.
+ */
+export const TREND_TABS = ROUTES.filter((route) => route.href.startsWith("/trends/")).map(
+  (route) => ({ href: route.href, label: route.label })
+)
 
 export const GROUP_LABEL: Record<RouteGroup, string> = {
   primary: "Overview",

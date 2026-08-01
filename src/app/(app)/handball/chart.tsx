@@ -73,7 +73,18 @@ export function MatchBoxScoreChart({ data }: { data: MatchBoxScorePoint[] }) {
         <Tooltip content={<BoxScoreTooltip />} cursor={{ fill: "var(--muted)" }} />
         <Legend wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
         {SERIES.map((s) => (
-          <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={16} />
+          // isAnimationActive={false} for the same reason as TrendChart: under
+          // Recharts 3.10 + React 19 the entrance animation leaves every bar at
+          // height 0 permanently, and a zero-height Rectangle renders nothing.
+          <Bar
+            key={s.key}
+            dataKey={s.key}
+            name={s.name}
+            fill={s.color}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={16}
+            isAnimationActive={false}
+          />
         ))}
       </BarChart>
     </ResponsiveContainer>
