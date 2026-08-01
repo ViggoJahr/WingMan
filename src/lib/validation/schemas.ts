@@ -140,9 +140,13 @@ export const matchEventSchema = z.object({
   score_us: z.number().int().min(0).max(200).nullable().optional(),
   score_them: z.number().int().min(0).max(200).nullable().optional(),
   position: z.enum(HANDBALL_POSITIONS).nullable().optional(),
+  // Metres on the attacking half, origin at the centre of the goal line. See
+  // the header of lib/handball/zones.ts for the full convention.
   court_x: nullableNumber,
   court_y: nullableNumber,
-  goal_cell: z.number().int().min(1).max(9).nullable().optional(),
+  // 1-9 numbered like a numpad (7-8-9 is the top row), 0 = off target. Null
+  // still means "not tagged", which is why off-target needed a value of its own.
+  goal_cell: z.number().int().min(0).max(9).nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
   source: z.enum(EVENT_SOURCES).optional(),
 })

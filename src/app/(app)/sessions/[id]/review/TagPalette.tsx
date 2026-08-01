@@ -18,6 +18,7 @@ const TONE_CLASS: Record<string, string> = {
 
 const GROUP_LABEL: Record<string, string> = {
   shot: "Shots",
+  score: "Scoreboard",
   play: "Play",
   discipline: "Discipline",
 }
@@ -40,7 +41,7 @@ export function TagPalette({
   hasActive: boolean
   disabled?: boolean
 }) {
-  const groups = ["shot", "play", "discipline"] as const
+  const groups = ["shot", "score", "play", "discipline"] as const
 
   return (
     <div className="flex flex-col gap-4">
