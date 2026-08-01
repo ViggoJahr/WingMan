@@ -8,6 +8,13 @@ export interface HeatmapDay {
   value: number
   /** Draws a ring around the cell - used for match days. */
   marked?: boolean
+  /**
+   * An injury was open on this day. Rendered as a strikethrough bar rather than
+   * a second colour: a light week means the opposite thing depending on whether
+   * you were hurt, and without it the heatmap silently reads a lay-off as a
+   * taper.
+   */
+  injured?: boolean
 }
 
 export interface ActivityHeatmapProps {
@@ -24,12 +31,16 @@ export interface ActivityHeatmapProps {
 
 // Intensity ramp is relative to the athlete's own busiest day in the window,
 // so it stays readable whether they're in pre-season or a taper week.
+//
+// This is a magnitude encoding, so it runs on one hue - the brand sage, faded
+// toward the surface. Rest days use --track, the same "nothing here yet" value
+// the progress rings use for their unfilled arc.
 const LEVEL_FILL = [
-  "var(--muted)",
-  "color-mix(in oklab, var(--chart-3) 28%, transparent)",
-  "color-mix(in oklab, var(--chart-3) 52%, transparent)",
-  "color-mix(in oklab, var(--chart-3) 76%, transparent)",
-  "var(--chart-3)",
+  "var(--track)",
+  "color-mix(in oklab, var(--brand-accent) 28%, transparent)",
+  "color-mix(in oklab, var(--brand-accent) 52%, transparent)",
+  "color-mix(in oklab, var(--brand-accent) 76%, transparent)",
+  "var(--brand-accent)",
 ]
 
 function levelFor(value: number, max: number): number {
@@ -116,7 +127,9 @@ export function ActivityHeatmap({
                     cell.value > 0
                       ? formatValue(cell.value, valueFormat)
                       : `no ${metricLabel}`
-                  }${cell.marked ? ` (${markedLabel.toLowerCase()})` : ""}`
+                  }${cell.marked ? ` (${markedLabel.toLowerCase()})` : ""}${
+                    cell.injured ? " - injured" : ""
+                  }`
 
                   return (
                     <Link
@@ -124,13 +137,20 @@ export function ActivityHeatmap({
                       href={`/history?from=${cell.day}&to=${cell.day}`}
                       title={label}
                       aria-label={label}
-                      className="size-[11px] rounded-[2px] transition-transform hover:scale-125"
+                      className="relative size-[11px] rounded-[2px] transition-transform hover:scale-125"
                       style={{
                         backgroundColor: LEVEL_FILL[level],
                         outline: cell.marked ? "1.5px solid var(--chart-2)" : undefined,
                         outlineOffset: "-1.5px",
                       }}
-                    />
+                    >
+                      {cell.injured && (
+                        <span
+                          aria-hidden
+                          className="absolute inset-x-0 top-1/2 h-[1.5px] -translate-y-1/2 bg-status-critical"
+                        />
+                      )}
+                    </Link>
                   )
                 })}
               </div>
@@ -164,6 +184,14 @@ export function ActivityHeatmap({
           />
           <span>{markedLabel}</span>
         </div>
+        {days.some((d) => d.injured) && (
+          <div className="flex items-center gap-1">
+            <span className="relative size-[11px] rounded-[2px] bg-track" aria-hidden>
+              <span className="absolute inset-x-0 top-1/2 h-[1.5px] -translate-y-1/2 bg-status-critical" />
+            </span>
+            <span>Injured</span>
+          </div>
+        )}
       </div>
     </div>
   )

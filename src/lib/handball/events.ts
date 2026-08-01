@@ -11,6 +11,8 @@
 
 export const MATCH_EVENT_TYPES = [
   "goal",
+  "team_goal",
+  "opponent_goal",
   "shot_missed",
   "shot_saved",
   "shot_attempt",
@@ -49,7 +51,7 @@ export interface EventMeta {
   label: string
   /** Single-key shortcut, no modifier. Must stay unique across the palette. */
   key: string
-  group: "shot" | "play" | "discipline"
+  group: "shot" | "play" | "discipline" | "score"
   tone: "good" | "bad" | "neutral"
   /** shot_attempt exists only for the backfill; it is never offered as a tag. */
   hidden?: boolean
@@ -57,6 +59,16 @@ export interface EventMeta {
 
 export const EVENT_META: Record<MatchEventType, EventMeta> = {
   goal: { label: "Goal", key: "g", group: "shot", tone: "good" },
+  // The scoreboard's other two thirds. `goal` means *you* scored and feeds your
+  // personal counter, so the team score cannot be derived from it alone - a
+  // teammate's goal moves the score without being anything you did, and a
+  // conceded goal moves it the other way.
+  //
+  // They keep the `u` and `i` bindings that used to nudge the old snapshot
+  // counters, so the muscle memory survives; the difference is that they now
+  // create real events the score can be counted from.
+  team_goal: { label: "Team goal", key: "u", group: "score", tone: "neutral" },
+  opponent_goal: { label: "Goal against", key: "i", group: "score", tone: "bad" },
   shot_missed: { label: "Missed", key: "m", group: "shot", tone: "bad" },
   shot_saved: { label: "Saved", key: "s", group: "shot", tone: "bad" },
   shot_attempt: { label: "Shot", key: "", group: "shot", tone: "neutral", hidden: true },
@@ -180,6 +192,42 @@ export function deriveBoxScore(events: readonly MatchEventLike[]): BoxScore {
   }
 
   return score
+}
+
+export interface RunningScore {
+  us: number
+  them: number
+}
+
+/** The three event types that move the scoreboard. */
+export const SCORING_EVENTS: ReadonlySet<string> = new Set([
+  "goal",
+  "team_goal",
+  "opponent_goal",
+])
+
+/**
+ * The score, counted from the events themselves.
+ *
+ * This replaces a stored snapshot. Each event used to carry score_us/score_them
+ * as tagged, and the box-score view took MAX() over them - which meant an
+ * opponent goal after your last tagged event was never recorded at all, and
+ * deleting a goal you had tagged left the score stuck at its old high-water
+ * mark, because a maximum cannot go down.
+ *
+ * Counting instead makes both cases fall out for free, and is the same shape as
+ * every other counter in the box score.
+ */
+export function deriveScore(events: readonly MatchEventLike[]): RunningScore {
+  let us = 0
+  let them = 0
+  for (const event of events) {
+    // `goal` is yours and `team_goal` is a teammate's; both move the scoreboard,
+    // but only the first feeds your box score.
+    if (event.event_type === "goal" || event.event_type === "team_goal") us += 1
+    else if (event.event_type === "opponent_goal") them += 1
+  }
+  return { us, them }
 }
 
 /** Palette key -> event type, for the keyboard handler. Built once. */

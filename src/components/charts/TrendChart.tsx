@@ -1,13 +1,18 @@
 "use client"
 
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, Line, LineChart, ResponsiveContainer, Tooltip } from "recharts"
+import { formatDate } from "@/lib/dates"
 import { formatValue, type ValueFormat } from "@/lib/valueFormat"
+import {
+  ChartGrid,
+  ChartTooltipShell,
+  ChartXAxis,
+  ChartYAxis,
+  NO_ENTRANCE_ANIMATION,
+  type ChartColor,
+} from "./chartChrome"
 
 export type { ValueFormat }
-
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-}
 
 /**
  * Declared once at module scope and passed as an element
@@ -32,12 +37,12 @@ function ChartTooltip({
   if (!active || typeof value !== "number") return null
 
   return (
-    <div className="rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
+    <ChartTooltipShell>
       <p className="font-semibold text-foreground">{formatValue(value, format)}</p>
       <p className="text-muted-foreground">
         {label ? `${labelPrefix}${formatDate(String(label))}` : ""}
       </p>
-    </div>
+    </ChartTooltipShell>
   )
 }
 
@@ -49,15 +54,13 @@ export interface TrendPoint {
 export interface TrendChartProps {
   data: TrendPoint[]
   kind: "line" | "bar"
-  color: "chart-1" | "chart-2" | "chart-3" | "chart-4" | "chart-5"
+  color: ChartColor
   format?: ValueFormat
   yDomain?: [number | string, number | string]
   height?: number
   /** Prefixes the tooltip's date line, e.g. "Week of " for a weekly rollup. */
   labelPrefix?: string
 }
-
-const AXIS_TICK = { fill: "var(--muted-foreground)", fontSize: 12 }
 
 export function TrendChart({
   data,
@@ -71,17 +74,6 @@ export function TrendChart({
   const stroke = `var(--${color})`
   const tooltip = <ChartTooltip format={format} labelPrefix={labelPrefix} />
 
-  const grid = <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-  const xAxis = (
-    <XAxis
-      dataKey="date"
-      tickFormatter={formatDate}
-      tick={AXIS_TICK}
-      axisLine={{ stroke: "var(--border)" }}
-      tickLine={false}
-    />
-  )
-
   // ResponsiveContainer is given a direct element child in each branch rather
   // than a ternary expression - it uses Children.only + cloneElement to inject
   // the measured width/height, and is fussy about what it receives.
@@ -89,11 +81,17 @@ export function TrendChart({
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          {grid}
-          {xAxis}
-          <YAxis domain={yDomain} tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} />
+          <ChartGrid />
+          <ChartXAxis dataKey="date" tickFormatter={formatDate} />
+          <ChartYAxis domain={yDomain} width={44} />
           <Tooltip content={tooltip} cursor={{ fill: "var(--muted)" }} />
-          <Bar dataKey="value" fill={stroke} radius={[4, 4, 0, 0]} maxBarSize={20} />
+          <Bar
+            dataKey="value"
+            fill={stroke}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={20}
+            {...NO_ENTRANCE_ANIMATION}
+          />
         </BarChart>
       </ResponsiveContainer>
     )
@@ -102,15 +100,9 @@ export function TrendChart({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        {grid}
-        {xAxis}
-        <YAxis
-          domain={yDomain ?? ["dataMin - 1", "dataMax + 1"]}
-          tick={AXIS_TICK}
-          axisLine={false}
-          tickLine={false}
-          width={40}
-        />
+        <ChartGrid />
+        <ChartXAxis dataKey="date" tickFormatter={formatDate} />
+        <ChartYAxis domain={yDomain ?? ["dataMin - 1", "dataMax + 1"]} />
         <Tooltip content={tooltip} cursor={{ stroke: "var(--border)" }} />
         <Line
           type="monotone"
@@ -118,6 +110,7 @@ export function TrendChart({
           stroke={stroke}
           strokeWidth={2}
           dot={{ r: 4, fill: stroke, stroke: "var(--card)", strokeWidth: 2 }}
+          {...NO_ENTRANCE_ANIMATION}
         />
       </LineChart>
     </ResponsiveContainer>

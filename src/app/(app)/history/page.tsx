@@ -4,6 +4,7 @@ import { SessionList, type SessionRowData } from "@/components/SessionRow"
 import { Pagination, pageParam, paginationRange, splitPage } from "@/components/Pagination"
 import { createClient } from "@/lib/supabase/server"
 import { SESSION_TYPES, sessionTypeLabel, sourceLabel, toSessionType } from "@/lib/labels"
+import { PageHeader, PageShell } from "@/components/PageShell"
 
 const PAGE_SIZE = 30
 
@@ -58,78 +59,75 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-        <div>
-          <h1 className="text-2xl font-semibold">History</h1>
-          <p className="text-muted-foreground">Every logged session, filterable.</p>
+    <PageShell>
+      <PageHeader title="History" description="Every logged session, filterable." />
+
+      <form method="get" className="flex flex-wrap items-end gap-3 text-sm">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="type">Type</label>
+          <select id="type" name="type" defaultValue={type ?? ""} className="h-9 rounded-md border bg-background px-2">
+            <option value="">All</option>
+            {SESSION_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {sessionTypeLabel(t)}
+              </option>
+            ))}
+          </select>
         </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="source">Source</label>
+          <select
+            id="source"
+            name="source"
+            defaultValue={source ?? ""}
+            className="h-9 rounded-md border bg-background px-2"
+          >
+            <option value="">All</option>
+            <option value="manual">Manual</option>
+            <option value="tugg">{sourceLabel("tugg")}</option>
+            <option value="google_health">{sourceLabel("google_health")}</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="from">From</label>
+          <input
+            id="from"
+            name="from"
+            type="date"
+            defaultValue={from ?? ""}
+            className="h-9 rounded-md border bg-background px-2"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="to">To</label>
+          <input
+            id="to"
+            name="to"
+            type="date"
+            defaultValue={to ?? ""}
+            className="h-9 rounded-md border bg-background px-2"
+          />
+        </div>
+        <button type="submit" className="h-9 rounded-md border bg-secondary px-3 text-secondary-foreground">
+          Filter
+        </button>
+        {(type || source || from || to) && (
+          <Link href="/history" className="h-9 content-center underline">
+            Clear
+          </Link>
+        )}
+      </form>
 
-        <form method="get" className="flex flex-wrap items-end gap-3 text-sm">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="type">Type</label>
-            <select id="type" name="type" defaultValue={type ?? ""} className="h-9 rounded-md border bg-background px-2">
-              <option value="">All</option>
-              {SESSION_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {sessionTypeLabel(t)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="source">Source</label>
-            <select
-              id="source"
-              name="source"
-              defaultValue={source ?? ""}
-              className="h-9 rounded-md border bg-background px-2"
-            >
-              <option value="">All</option>
-              <option value="manual">Manual</option>
-              <option value="tugg">{sourceLabel("tugg")}</option>
-              <option value="google_health">{sourceLabel("google_health")}</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="from">From</label>
-            <input
-              id="from"
-              name="from"
-              type="date"
-              defaultValue={from ?? ""}
-              className="h-9 rounded-md border bg-background px-2"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="to">To</label>
-            <input
-              id="to"
-              name="to"
-              type="date"
-              defaultValue={to ?? ""}
-              className="h-9 rounded-md border bg-background px-2"
-            />
-          </div>
-          <button type="submit" className="h-9 rounded-md border bg-secondary px-3 text-secondary-foreground">
-            Filter
-          </button>
-          {(type || source || from || to) && (
-            <Link href="/history" className="h-9 content-center underline">
-              Clear
-            </Link>
-          )}
-        </form>
+      <Card>
+        <CardHeader>
+          <CardTitle>Sessions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SessionList sessions={sessions} emptyMessage="No sessions match these filters." />
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sessions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SessionList sessions={sessions} emptyMessage="No sessions match these filters." />
-          </CardContent>
-        </Card>
-
-        <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
-      </div>
+      <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
+    </PageShell>
   )
 }

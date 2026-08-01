@@ -46,7 +46,6 @@ export type Database = {
           date: string
           external_id: string | null
           external_source: string | null
-          height_cm: number | null
           id: string
           user_id: string | null
           weight_kg: number | null
@@ -56,7 +55,6 @@ export type Database = {
           date: string
           external_id?: string | null
           external_source?: string | null
-          height_cm?: number | null
           id?: string
           user_id?: string | null
           weight_kg?: number | null
@@ -66,7 +64,6 @@ export type Database = {
           date?: string
           external_id?: string | null
           external_source?: string | null
-          height_cm?: number | null
           id?: string
           user_id?: string | null
           weight_kg?: number | null
@@ -620,64 +617,37 @@ export type Database = {
       }
       matches: {
         Row: {
-          assists: number | null
-          big_mistakes: number | null
-          blocks: number | null
-          breakthroughs: number | null
-          goals: number | null
           importance: number | null
           is_home: boolean | null
-          nine_m_shots: number | null
+          minutes_period_1: number | null
+          minutes_period_2: number | null
           opponent: string | null
           opposition_difficulty: number | null
           play_time_min: number | null
+          plus_minus: number | null
           session_id: string
-          shots_missed: number | null
-          shots_saved: number | null
-          steals: number | null
-          suspensions_created: number | null
-          suspensions_received: number | null
-          technical_faults: number | null
         }
         Insert: {
-          assists?: number | null
-          big_mistakes?: number | null
-          blocks?: number | null
-          breakthroughs?: number | null
-          goals?: number | null
           importance?: number | null
           is_home?: boolean | null
-          nine_m_shots?: number | null
+          minutes_period_1?: number | null
+          minutes_period_2?: number | null
           opponent?: string | null
           opposition_difficulty?: number | null
           play_time_min?: number | null
+          plus_minus?: number | null
           session_id: string
-          shots_missed?: number | null
-          shots_saved?: number | null
-          steals?: number | null
-          suspensions_created?: number | null
-          suspensions_received?: number | null
-          technical_faults?: number | null
         }
         Update: {
-          assists?: number | null
-          big_mistakes?: number | null
-          blocks?: number | null
-          breakthroughs?: number | null
-          goals?: number | null
           importance?: number | null
           is_home?: boolean | null
-          nine_m_shots?: number | null
+          minutes_period_1?: number | null
+          minutes_period_2?: number | null
           opponent?: string | null
           opposition_difficulty?: number | null
           play_time_min?: number | null
+          plus_minus?: number | null
           session_id?: string
-          shots_missed?: number | null
-          shots_saved?: number | null
-          steals?: number | null
-          suspensions_created?: number | null
-          suspensions_received?: number | null
-          technical_faults?: number | null
         }
         Relationships: [
           {
@@ -756,6 +726,8 @@ export type Database = {
           end_time: string | null
           external_id: string | null
           external_source: string | null
+          hr_timeline: Json | null
+          hr_timeline_fetched_at: string | null
           hr_zones: Json | null
           id: string
           location: string | null
@@ -775,6 +747,8 @@ export type Database = {
           end_time?: string | null
           external_id?: string | null
           external_source?: string | null
+          hr_timeline?: Json | null
+          hr_timeline_fetched_at?: string | null
           hr_zones?: Json | null
           id?: string
           location?: string | null
@@ -794,6 +768,8 @@ export type Database = {
           end_time?: string | null
           external_id?: string | null
           external_source?: string | null
+          hr_timeline?: Json | null
+          hr_timeline_fetched_at?: string | null
           hr_zones?: Json | null
           id?: string
           location?: string | null

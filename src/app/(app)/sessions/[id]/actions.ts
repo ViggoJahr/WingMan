@@ -7,7 +7,20 @@ import { decrypt } from "@/lib/crypto"
 import { refreshAccessToken } from "@/lib/integrations/google_health/auth"
 import { fetchHeartRateRollup, type HeartRateRollupBucket } from "@/lib/integrations/google_health/client"
 
+/**
+ * The session's heart-rate timeline, fetched once and cached forever.
+ *
+ * A finished session's heart rate cannot change, so this used to spend a fresh
+ * OAuth token exchange plus a Google rollUp POST on every single page view for
+ * data that was already known. It now reads `sessions.hr_timeline` and only
+ * calls Google when that has never been populated.
+ *
+ * `hr_timeline_fetched_at` is what makes the negative case cacheable too:
+ * without it, a session Google has no samples for would be re-fetched on every
+ * view, which is the behaviour being removed.
+ */
 export async function getHeartRateTimeline(
+  sessionId: string,
   startTime: string,
   endTime: string
 ): Promise<HeartRateRollupBucket[] | null> {
@@ -16,6 +29,17 @@ export async function getHeartRateTimeline(
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
+
+  // RLS scopes this read to the caller's own session.
+  const { data: session } = await supabase
+    .from("sessions")
+    .select("hr_timeline, hr_timeline_fetched_at")
+    .eq("id", sessionId)
+    .maybeSingle()
+
+  if (session?.hr_timeline_fetched_at) {
+    return (session.hr_timeline as HeartRateRollupBucket[] | null) ?? []
+  }
 
   const db = createServiceRoleClient()
   const { data: account } = await db
@@ -31,7 +55,24 @@ export async function getHeartRateTimeline(
   const durationSeconds = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000
   const windowSizeSeconds = Math.max(30, Math.round(durationSeconds / 80))
 
-  return fetchHeartRateRollup(tokens.accessToken, startTime, endTime, windowSizeSeconds)
+  const buckets = await fetchHeartRateRollup(
+    tokens.accessToken,
+    startTime,
+    endTime,
+    windowSizeSeconds
+  )
+
+  // Written even when empty - the stamp is the cache entry, and an empty
+  // timeline is a real answer worth remembering.
+  await supabase
+    .from("sessions")
+    .update({
+      hr_timeline: buckets.length > 0 ? buckets : null,
+      hr_timeline_fetched_at: new Date().toISOString(),
+    })
+    .eq("id", sessionId)
+
+  return buckets
 }
 
 /**

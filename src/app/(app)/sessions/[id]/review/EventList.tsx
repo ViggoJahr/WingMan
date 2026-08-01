@@ -1,7 +1,14 @@
 "use client"
 
+import { useMemo } from "react"
 import { cn } from "@/lib/utils"
-import { EVENT_META, SHOT_ORIGIN_LABELS, type MatchEventType, type ShotOrigin } from "@/lib/handball/events"
+import {
+  EVENT_META,
+  SCORING_EVENTS,
+  SHOT_ORIGIN_LABELS,
+  type MatchEventType,
+  type ShotOrigin,
+} from "@/lib/handball/events"
 import { describeEventTime, type PeriodOffsets } from "@/lib/handball/videoClock"
 import type { LocalEvent } from "./reviewTypes"
 
@@ -46,6 +53,24 @@ export function EventList({
 }) {
   const setEditingNote = onEditingNoteChange
 
+  // Scoreboard as it stood at each clip, folded over the list rather than read
+  // from the stored snapshot - `events` arrives in timeline order, and the
+  // snapshot columns are context only now that deriveScore is authoritative.
+  // Built up front rather than during the map: mutating a captured variable
+  // inside the render callback is what react-hooks/immutability forbids, and it
+  // has to sit above the empty-state return to keep the hook order stable.
+  const scoreAt = useMemo(() => {
+    const byId = new Map<string, string>()
+    let us = 0
+    let them = 0
+    for (const event of events) {
+      if (event.event_type === "goal" || event.event_type === "team_goal") us += 1
+      else if (event.event_type === "opponent_goal") them += 1
+      if (SCORING_EVENTS.has(event.event_type)) byId.set(event.id, `${us}-${them}`)
+    }
+    return byId
+  }, [events])
+
   if (events.length === 0) {
     return (
       <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -60,6 +85,8 @@ export function EventList({
         const meta = EVENT_META[event.event_type as MatchEventType]
         const isActive = event.id === activeId
         const canSeek = seekable && event.video_offset_seconds != null
+
+        const scoreLine = scoreAt.get(event.id)
 
         return (
           <li
@@ -101,10 +128,8 @@ export function EventList({
                 </span>
               )}
 
-              {event.score_us != null && event.score_them != null && (
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {event.score_us}-{event.score_them}
-                </span>
+              {scoreLine && (
+                <span className="text-xs tabular-nums text-muted-foreground">{scoreLine}</span>
               )}
 
               <span className="ml-auto flex items-center gap-2">

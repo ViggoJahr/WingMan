@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination, pageParam, paginationRange, splitPage } from "@/components/Pagination"
 import { createClient } from "@/lib/supabase/server"
 import { cn } from "@/lib/utils"
+import { PageHeader, PageShell } from "@/components/PageShell"
 
 const RESOURCE_TYPES = [
   "workout_plan",
@@ -91,61 +92,59 @@ export default async function PlanPage({
     })}`
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Plan</h1>
-          <p className="text-muted-foreground">
-            TUGG&apos;s prescribed/planned workouts - reference only, not editable here.
-          </p>
-        </div>
+    <PageShell>
+      <PageHeader
+        title="Plan"
+        description="TUGG's prescribed/planned workouts - reference only, not editable here."
+      />
 
-        <div className="flex flex-wrap gap-2 text-sm">
+      <div className="flex flex-wrap gap-2 text-sm">
+        <Link
+          href="/plan"
+          className={cn("rounded-md border px-2 py-1", !type && "bg-accent font-medium")}
+        >
+          All
+        </Link>
+        {RESOURCE_TYPES.map((t) => (
           <Link
-            href="/plan"
-            className={cn("rounded-md border px-2 py-1", !type && "bg-accent font-medium")}
+            key={t}
+            href={`/plan?type=${t}`}
+            className={cn("rounded-md border px-2 py-1", type === t && "bg-accent font-medium")}
           >
-            All
+            {RESOURCE_LABEL[t]}
           </Link>
-          {RESOURCE_TYPES.map((t) => (
-            <Link
-              key={t}
-              href={`/plan?type=${t}`}
-              className={cn("rounded-md border px-2 py-1", type === t && "bg-accent font-medium")}
-            >
-              {RESOURCE_LABEL[t]}
-            </Link>
-          ))}
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Items</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {items.length > 0 ? (
-              <ul className="flex flex-col divide-y text-sm">
-                {items.map((item) => {
-                  const { title, detail } = renderSummary(item.resource_type, item.payload as Payload)
-                  return (
-                    <li key={item.id} className="flex items-center justify-between py-2">
-                      <div>
-                        <p className="font-medium">{title}</p>
-                        {detail && <p className="text-muted-foreground">{detail}</p>}
-                      </div>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {RESOURCE_LABEL[item.resource_type] ?? item.resource_type}
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No planned items synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
+        ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Items</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {items.length > 0 ? (
+            <ul className="flex flex-col divide-y text-sm">
+              {items.map((item) => {
+                const { title, detail } = renderSummary(item.resource_type, item.payload as Payload)
+                return (
+                  <li key={item.id} className="flex items-center justify-between py-2">
+                    <div>
+                      <p className="font-medium">{title}</p>
+                      {detail && <p className="text-muted-foreground">{detail}</p>}
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {RESOURCE_LABEL[item.resource_type] ?? item.resource_type}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No planned items synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
+    </PageShell>
   )
 }

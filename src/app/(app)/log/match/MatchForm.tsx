@@ -9,13 +9,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { Field, FieldError, FormAlert, SubmitButton, fieldValue } from "@/components/forms/FormParts"
 import { idleState } from "@/lib/validation/formState"
-import { logMatch, updateMatch } from "./actions"
-
-function nowLocalDatetime() {
-  const now = new Date()
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
-  return now.toISOString().slice(0, 16)
-}
+import { nowLocalDatetime } from "@/lib/dates"
+import { attachMatch, logMatch, updateMatch } from "./actions"
 
 const ratingFields: Array<{ name: string; label: string; max: number }> = [
   { name: "importance", label: "Importance (1-10)", max: 10 },
@@ -31,6 +26,9 @@ export interface MatchDefaults {
   is_home: boolean
   location: string | null
   play_time_min: number | null
+  minutes_period_1: number | null
+  minutes_period_2: number | null
+  plus_minus: number | null
   importance: number | null
   opposition_difficulty: number | null
   perceived_performance: number | null
@@ -45,13 +43,20 @@ export function MatchForm({
   defaultValues,
   eventCount = 0,
 }: {
-  mode: "create" | "edit"
+  /** See PracticeForm - "attach" fills in a session the watch already detected. */
+  mode: "create" | "edit" | "attach"
   sessionId?: string
   defaultValues?: MatchDefaults
   /** Events already tagged, so the edit form can point at the review page. */
   eventCount?: number
 }) {
-  const action = mode === "edit" ? updateMatch.bind(null, sessionId!) : logMatch
+  const isAttach = mode === "attach"
+  const action =
+    mode === "edit"
+      ? updateMatch.bind(null, sessionId!)
+      : isAttach
+        ? attachMatch.bind(null, sessionId!)
+        : logMatch
   const [state, formAction] = useActionState(action, idleState)
   const v = (name: string, fallback: string | number | null | undefined) =>
     fieldValue(state, name, fallback)
@@ -65,15 +70,23 @@ export function MatchForm({
     <form action={formAction} className="flex flex-col gap-4">
       <FormAlert state={state} />
 
-      <Field name="start_time" label="Start time" state={state}>
-        <Input
-          id="start_time"
-          name="start_time"
-          type="datetime-local"
-          defaultValue={v("start_time", defaultValues?.start_time ?? nowLocalDatetime())}
-          required
-        />
-      </Field>
+      {isAttach ? (
+        <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          Attaching to a session your watch already recorded. Its timing stays as measured; you add
+          the match detail.
+          <input type="hidden" name="start_time" value={defaultValues?.start_time ?? ""} />
+        </p>
+      ) : (
+        <Field name="start_time" label="Start time" state={state}>
+          <Input
+            id="start_time"
+            name="start_time"
+            type="datetime-local"
+            defaultValue={v("start_time", defaultValues?.start_time ?? nowLocalDatetime())}
+            required
+          />
+        </Field>
+      )}
 
       <Field name="opponent" label="Opponent" state={state}>
         <Input
@@ -108,7 +121,7 @@ export function MatchForm({
         />
       </Field>
 
-      <Field name="play_time_min" label="Minutes played" state={state}>
+      <Field name="play_time_min" label="Minutes played (total)" state={state}>
         <Input
           id="play_time_min"
           name="play_time_min"
@@ -117,6 +130,39 @@ export function MatchForm({
           defaultValue={v("play_time_min", defaultValues?.play_time_min)}
         />
       </Field>
+
+      <div className="grid grid-cols-3 gap-4">
+        <Field name="minutes_period_1" label="1st half" state={state}>
+          <Input
+            id="minutes_period_1"
+            name="minutes_period_1"
+            type="number"
+            min={0}
+            max={40}
+            defaultValue={v("minutes_period_1", defaultValues?.minutes_period_1)}
+          />
+        </Field>
+        <Field name="minutes_period_2" label="2nd half" state={state}>
+          <Input
+            id="minutes_period_2"
+            name="minutes_period_2"
+            type="number"
+            min={0}
+            max={40}
+            defaultValue={v("minutes_period_2", defaultValues?.minutes_period_2)}
+          />
+        </Field>
+        <Field name="plus_minus" label="+/-" state={state} hint="On court">
+          <Input
+            id="plus_minus"
+            name="plus_minus"
+            type="number"
+            min={-60}
+            max={60}
+            defaultValue={v("plus_minus", defaultValues?.plus_minus)}
+          />
+        </Field>
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         {ratingFields.map((field) => (
@@ -165,7 +211,7 @@ export function MatchForm({
       </Field>
 
       <SubmitButton className="mt-2">
-        {mode === "edit" ? "Save changes" : "Save match"}
+        {mode === "edit" ? "Save changes" : isAttach ? "Attach match detail" : "Save match"}
       </SubmitButton>
     </form>
   )

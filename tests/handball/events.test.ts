@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest"
 import {
   EVENT_META,
   EVENT_TYPE_BY_KEY,
+  MATCH_EVENT_TYPES,
   PALETTE_EVENT_TYPES,
+  SCORING_EVENTS,
   SHOT_ORIGIN_BY_KEY,
   deriveBoxScore,
+  deriveScore,
   type MatchEventLike,
 } from "@/lib/handball/events"
 
@@ -117,6 +120,63 @@ describe("deriveBoxScore", () => {
       blocks: 1,
       big_mistakes: 0 + 1,
     })
+  })
+})
+
+describe("deriveScore", () => {
+  it("starts a match at 0-0", () => {
+    expect(deriveScore([])).toEqual({ us: 0, them: 0 })
+  })
+
+  it("counts your goals and a teammate's on the same side", () => {
+    const score = deriveScore([event("goal"), event("team_goal"), event("goal")])
+    expect(score).toEqual({ us: 3, them: 0 })
+  })
+
+  it("keeps a teammate's goal out of your box score", () => {
+    // The scoreboard moves, but team_goal is not something you did - which is
+    // the entire reason it is a separate type from `goal`.
+    const events = [event("goal"), event("team_goal"), event("team_goal")]
+    expect(deriveScore(events).us).toBe(3)
+    expect(deriveBoxScore(events).goals).toBe(1)
+  })
+
+  it("records opponent goals after the last thing you did", () => {
+    // The old snapshot could not: nothing was tagged to carry the new score, so
+    // a late run of conceded goals simply vanished.
+    const score = deriveScore([
+      event("goal"),
+      event("opponent_goal"),
+      event("opponent_goal"),
+      event("opponent_goal"),
+    ])
+    expect(score).toEqual({ us: 1, them: 3 })
+  })
+
+  it("goes down when a tagged goal is deleted", () => {
+    // MAX() over a stored snapshot could only ever climb, so an accidental tag
+    // was permanent.
+    const events = [event("goal"), event("goal"), event("opponent_goal")]
+    expect(deriveScore(events)).toEqual({ us: 2, them: 1 })
+    expect(deriveScore(events.slice(1))).toEqual({ us: 1, them: 1 })
+  })
+
+  it("ignores everything that is not a goal", () => {
+    const score = deriveScore([
+      event("assist"),
+      event("shot_missed"),
+      event("shot_saved"),
+      event("steal"),
+      event("suspension_received"),
+    ])
+    expect(score).toEqual({ us: 0, them: 0 })
+  })
+
+  it("agrees with SCORING_EVENTS about which types move the score", () => {
+    for (const type of MATCH_EVENT_TYPES) {
+      const { us, them } = deriveScore([event(type)])
+      expect(us + them > 0).toBe(SCORING_EVENTS.has(type))
+    }
   })
 })
 

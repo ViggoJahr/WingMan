@@ -1,12 +1,14 @@
 import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader, PageShell } from "@/components/PageShell"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
 import { fetchDailyFacts, factNumber as num, type DailyFactRow } from "@/lib/services/dailyFacts"
 import { sessionTypeLabel } from "@/lib/labels"
-import { todayIso } from "@/lib/dates"
+import { isoDaysAgo, todayIso } from "@/lib/dates"
+import { injuryDurationDays, injurySiteLabel } from "@/lib/injuries"
 import {
   ACWR_BAND_LABEL,
   acwrBand,
@@ -14,6 +16,8 @@ import {
   intensityCoverage,
 } from "@/lib/services/loadMetrics"
 import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap"
+import { ProgressRing } from "@/components/charts/ProgressRing"
+import { WeekDotStrip } from "@/components/charts/WeekDotStrip"
 import { StatTile, type TileStatus } from "@/components/StatTile"
 import { SessionList, type SessionRowData } from "@/components/SessionRow"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
@@ -66,7 +70,7 @@ export default async function Home({
 
   const today = todayIso()
 
-  const [facts, { data: sessions }] = await Promise.all([
+  const [facts, { data: sessions }, { data: injuries }] = await Promise.all([
     fetchDailyFacts(supabase, { days: HISTORY_DAYS }),
     supabase
       .from("sessions")
@@ -76,7 +80,14 @@ export default async function Home({
       .is("merged_into", null)
       .order("start_time", { ascending: false })
       .limit(10),
+    supabase
+      .from("injuries")
+      .select("id, type, grade, injured_date, cleared_date")
+      .gte("injured_date", isoDaysAgo(HISTORY_DAYS))
+      .order("injured_date", { ascending: false }),
   ])
+
+  const openInjuries = (injuries ?? []).filter((i) => i.cleared_date == null)
 
   const last7 = facts.slice(-7)
   const prev7 = facts.slice(-14, -7)
@@ -129,27 +140,57 @@ export default async function Home({
   const latestWeight = weightFacts[weightFacts.length - 1]
   const priorWeight = weightFacts.filter((f) => f.day <= (latestWeight?.day ?? "")).slice(-30)[0]
 
+  // A light week means the opposite thing depending on whether you were hurt,
+  // so the heatmap marks injured days rather than letting a lay-off read as a
+  // taper. An injury with no cleared_date is still open, hence the open end.
+  const injuredOn = (day: string) =>
+    (injuries ?? []).some(
+      (injury) => day >= injury.injured_date && (injury.cleared_date == null || day <= injury.cleared_date)
+    )
+
   const heatmapDays = facts.map((f) => ({
     day: f.day,
     value: num(f.load_estimate) ?? 0,
     marked: f.had_match === true,
+    injured: injuredOn(f.day),
   }))
+
+  // Which days of the last week were trained, not just how much in total - the
+  // one thing the tiles cannot say. daily_facts generates a full calendar, so a
+  // rest day is a real zero row and "didn't train" is distinguishable from
+  // "no data", which is the whole point of the strip.
+  const weekMaxLoad = Math.max(...last7.map((f) => num(f.load_estimate) ?? 0), 1)
+  const weekDays = last7.map((f) => {
+    const load = num(f.load_estimate) ?? 0
+    const count = num(f.session_count) ?? 0
+    return {
+      date: f.day,
+      level: (count === 0 ? 0 : load >= weekMaxLoad * 0.5 ? 2 : 1) as 0 | 1 | 2,
+      title:
+        count === 0
+          ? `${f.day} - rest`
+          : `${f.day} - ${count} session${count === 1 ? "" : "s"}, load ${Math.round(load)}`,
+    }
+  })
+  // Rest days, not trained days. Google Health logs every detected walk as a
+  // session, so "days with a session" is 7 most weeks and says nothing. Days
+  // with *no* load is the number that varies - and against an ACWR that is
+  // already ramping, it is the one worth seeing.
+  const restDays = weekDays.filter((d) => d.level === 0).length
 
   // Sessions that still need an RPE, newest first - the one action that
   // actually improves the numbers above.
   const unratedRecent = (sessions ?? []).filter((s) => s.rpe == null && s.manual_rpe == null)
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Training Hub</h1>
-        <p className="text-muted-foreground">Signed in as {user?.email}</p>
-        {logged && (
-          <p className="mt-2 rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
-            Saved your {logged} log.
-          </p>
-        )}
-      </div>
+    <PageShell width="wide">
+      <PageHeader title="Training Hub" description={`Signed in as ${user?.email ?? ""}`} />
+
+      {logged && (
+        <p className="rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
+          Saved your {logged} log.
+        </p>
+      )}
 
       {healthWarnings.length > 0 && (
         <div className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm">
@@ -167,6 +208,25 @@ export default async function Home({
         </div>
       )}
 
+      {openInjuries.length > 0 && (
+        <Link
+          href="/injuries"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm transition-colors hover:bg-status-critical/15"
+        >
+          <span className="font-medium text-status-critical">
+            {openInjuries.length === 1 ? "Injury open" : `${openInjuries.length} injuries open`}
+          </span>
+          <span className="text-muted-foreground">
+            {openInjuries
+              .map(
+                (injury) =>
+                  `${injurySiteLabel(injury.type)}, day ${injuryDurationDays(injury.injured_date, null)}`
+              )
+              .join(" - ")}
+          </span>
+        </Link>
+      )}
+
       {!todaysFact?.readiness_score && (
         <Link
           href="/log/readiness"
@@ -177,13 +237,39 @@ export default async function Home({
         </Link>
       )}
 
+      <Card>
+        <CardContent className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
+          <ProgressRing
+            value={readinessScore ?? 0}
+            max={100}
+            label="Readiness"
+            display={readinessScore != null ? String(readinessScore) : "-"}
+            caption={readinessScore != null ? "of 100" : "not logged"}
+            tone={
+              readinessScore == null
+                ? "brand"
+                : readinessScore >= 70
+                  ? "good"
+                  : readinessScore >= 50
+                    ? "warning"
+                    : "critical"
+            }
+          />
+          <WeekDotStrip
+            days={weekDays}
+            label={`Last 7 days - ${restDays === 0 ? "no rest days" : `${restDays} rest`}`}
+            className="w-full min-w-0 flex-1"
+          />
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile
           label="Readiness today"
           value={readinessScore != null ? `${readinessScore}` : "-"}
           hint={readinessScore != null ? "out of 100" : "not logged"}
           status={readinessScore != null ? readinessStatus(readinessScore) : "neutral"}
-          href="/readiness"
+          href="/trends/readiness"
           delta={
             percentChange(avgReadiness, prevAvgReadiness) && {
               ...percentChange(avgReadiness, prevAvgReadiness)!,
@@ -205,7 +291,7 @@ export default async function Home({
                 : "needs 28 days"
           }
           status={showAcwr ? acwrStatus(latestMetrics.acwr!) : "neutral"}
-          href="/training-load"
+          href="/trends/load"
           sparkline={
             showAcwr
               ? loadMetrics
@@ -224,7 +310,7 @@ export default async function Home({
               ? `monotony ${latestMetrics.monotony.toFixed(2)}`
               : "partly estimated"
           }
-          href="/training-load"
+          href="/trends/load"
           delta={
             percentChange(weeklyLoad, prevWeeklyLoad) && {
               ...percentChange(weeklyLoad, prevWeeklyLoad)!,
@@ -238,7 +324,7 @@ export default async function Home({
         <StatTile
           label="Sleep (7d avg)"
           value={avgSleep != null ? `${avgSleep.toFixed(1)} h` : "-"}
-          href="/health"
+          href="/trends/body"
           delta={
             percentChange(avgSleep, prevAvgSleep) && {
               ...percentChange(avgSleep, prevAvgSleep)!,
@@ -252,7 +338,7 @@ export default async function Home({
         <StatTile
           label="Avg steps (7d)"
           value={avgSteps != null ? Math.round(avgSteps).toLocaleString() : "-"}
-          href="/health"
+          href="/trends/body"
           delta={
             percentChange(avgSteps, prevAvgSteps) && {
               ...percentChange(avgSteps, prevAvgSteps)!,
@@ -267,7 +353,7 @@ export default async function Home({
           label="Weight"
           value={latestWeight ? `${num(latestWeight.weight_kg)!.toFixed(1)} kg` : "-"}
           hint={latestWeight && latestWeight.day !== today ? `as of ${latestWeight.day}` : undefined}
-          href="/health"
+          href="/trends/body"
           delta={
             latestWeight && priorWeight && priorWeight.day !== latestWeight.day
               ? {
@@ -357,6 +443,6 @@ export default async function Home({
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

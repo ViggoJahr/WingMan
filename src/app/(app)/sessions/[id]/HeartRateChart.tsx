@@ -1,7 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Area, ComposedChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Area, ComposedChart, Line, ResponsiveContainer, Tooltip } from "recharts"
+import {
+  ChartGrid,
+  ChartTooltipShell,
+  ChartXAxis,
+  ChartYAxis,
+  NO_ENTRANCE_ANIMATION,
+  SERIES_COLOR,
+} from "@/components/charts/chartChrome"
 import type { HeartRateRollupBucket } from "@/lib/integrations/google_health/client"
 import { getHeartRateTimeline } from "./actions"
 
@@ -21,25 +29,33 @@ function HrTooltip({
   const point = payload?.[0]?.payload
   if (!active || !point) return null
   return (
-    <div className="rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
+    <ChartTooltipShell>
       <p className="font-semibold text-foreground">{point.avg} bpm avg</p>
       <p className="text-muted-foreground">
         {point.min}-{point.max} bpm range
       </p>
       <p className="text-muted-foreground">{label ? formatTime(String(label)) : ""}</p>
-    </div>
+    </ChartTooltipShell>
   )
 }
 
 type ChartPoint = HeartRateRollupBucket & { range: [number, number] }
 
-export function HeartRateChart({ startTime, endTime }: { startTime: string; endTime: string }) {
+export function HeartRateChart({
+  sessionId,
+  startTime,
+  endTime,
+}: {
+  sessionId: string
+  startTime: string
+  endTime: string
+}) {
   const [state, setState] = useState<"loading" | "empty" | "error" | "ready">("loading")
   const [buckets, setBuckets] = useState<ChartPoint[]>([])
 
   useEffect(() => {
     let cancelled = false
-    getHeartRateTimeline(startTime, endTime)
+    getHeartRateTimeline(sessionId, startTime, endTime)
       .then((result) => {
         if (cancelled) return
         if (!result || result.length === 0) {
@@ -55,7 +71,7 @@ export function HeartRateChart({ startTime, endTime }: { startTime: string; endT
     return () => {
       cancelled = true
     }
-  }, [startTime, endTime])
+  }, [sessionId, startTime, endTime])
 
   if (state === "loading") {
     return <p className="text-sm text-muted-foreground">Loading heart rate...</p>
@@ -71,36 +87,24 @@ export function HeartRateChart({ startTime, endTime }: { startTime: string; endT
     <div>
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={buckets} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-          <XAxis
-            dataKey="startTime"
-            tickFormatter={formatTime}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
-            axisLine={{ stroke: "var(--border)" }}
-            tickLine={false}
-          />
-          <YAxis
-            domain={["dataMin - 5", "dataMax + 5"]}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
-            axisLine={false}
-            tickLine={false}
-            width={32}
-          />
+          <ChartGrid />
+          <ChartXAxis dataKey="startTime" tickFormatter={formatTime} />
+          <ChartYAxis domain={["dataMin - 5", "dataMax + 5"]} width={32} />
           <Tooltip content={<HrTooltip />} cursor={{ stroke: "var(--border)" }} />
           <Area
             dataKey="range"
             stroke="none"
-            fill="var(--chart-1)"
+            fill={`var(--${SERIES_COLOR.primary})`}
             fillOpacity={0.12}
-            isAnimationActive={false}
+            {...NO_ENTRANCE_ANIMATION}
           />
           <Line
             type="monotone"
             dataKey="avg"
-            stroke="var(--chart-1)"
+            stroke={`var(--${SERIES_COLOR.primary})`}
             strokeWidth={2}
             dot={false}
-            isAnimationActive={false}
+            {...NO_ENTRANCE_ANIMATION}
           />
         </ComposedChart>
       </ResponsiveContainer>

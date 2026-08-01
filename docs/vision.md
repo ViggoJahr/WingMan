@@ -171,8 +171,17 @@ turn is the difference between ACWR being displayable and not.
 `getHeartRateTimeline` currently does a fresh OAuth token exchange **and** a
 Google rollUp POST on every single session-detail page view, and stores nothing.
 
-- Cache buckets into a `session_hr_samples` table (or a `sessions.hr_timeline`
-  jsonb column). Fetch once, serve locally forever.
+- ~~Cache buckets~~ **Done 2026-08-01** as `sessions.hr_timeline` jsonb plus
+  `hr_timeline_fetched_at`. A child table would have added a join and an index
+  to serve a query nobody makes — the payload is ~80 buckets, read whole, for
+  one session. The timestamp is what makes the *negative* case cacheable: a
+  session Google has no samples for would otherwise be re-fetched on every view,
+  which is the behaviour being removed.
+- **The derivation is deliberately still pending.** Turning this into TRIMP, or
+  into a new `load_estimate` tier, moves the load figure for most historical
+  sessions — and with it every ACWR band, heatmap cell and dashboard tile. It
+  has to be its own reviewable change, made after the cache is populated and
+  spot-checked against sessions whose effort is known.
 - With HR persisted, derive **TRIMP** as an objective load metric alongside
   session-RPE. Where the two disagree is real signal about perception vs
   physiology.
@@ -223,17 +232,24 @@ the preceding 3 / 7 / 28 days, ACWR, days since last match, kickoff time of day.
 
 #### 5. Remaining hardening
 
-- **TUGG incremental sync.** `fetchAll` is `select("*")` across 10 tables with
-  no filter, cursor or pagination, run nightly. Supabase's default 1,000-row
-  PostgREST cap means it will *silently truncate* rather than error once any
-  table grows past it. **This is now the largest known correctness risk in the
-  repo** — it fails quietly and gets worse with every session logged. Add a
-  cursor mirroring Google Health's `SYNC_WINDOW_DAYS` and batch the writes.
-  *(Exercise-name lookups are memoised per run now.)*
-- **Tests** for `sessionMerge` (the subtlest code in the repo, and it mutates
-  data), the server actions, and both adapter write paths. The suite is pure
-  functions only by design — no DB harness — so these need either a fake
-  `SupabaseClient` or a decision to relax that constraint.
+- ~~**TUGG incremental sync.**~~ **Done 2026-08-01.** `fetchAll` now pages
+  through with `.range()`, ordered by `id` so a row cannot land on two pages or
+  none. Deliberately *without* the suggested `SYNC_WINDOW_DAYS` cursor: paging
+  is what fixes the bug, and a window trades correctness for a saving that does
+  not exist yet — the largest sync so far moved 326 rows, `exercise_progress`
+  has no event date to filter on, and a window silently skips rows edited after
+  they age out, which is the same class of quiet wrongness. `fetchPaged` takes a
+  `since` option for when volume justifies it.
+- **Tests.** The suite was pure-functions-only by design, which left
+  `sessionMerge` — the subtlest code here, and the only code that *mutates*
+  data — entirely uncovered. **That constraint is now relaxed**, via a minimal
+  fake PostgREST builder in `tests/support/fakeSupabase.ts`. It implements only
+  the operators `sessionMerge` uses, so it cannot drift into a half-built ORM.
+  Fifteen cases cover the richness rule, the hand-entered-detail override, the
+  merge window and the backfill; they were mutation-tested (inverting the
+  richness comparison fails 8, removing the same-source guard fails 9) to
+  confirm they have teeth. Still open: the server actions and both adapter
+  write paths.
 - **Persist the running score properly.** The review UI snapshots `score_us` /
   `score_them` onto each event as it is tagged, and the box-score view takes
   `MAX()` over them. That means an opponent goal after the last tagged event is
@@ -348,9 +364,31 @@ Whichever is chosen, the tool layer should read `daily_facts` first and fall
 back to raw tables only for detail the view doesn't carry. Decide before
 building — retrofitting the boundary is the expensive part.
 
-### Needs a human eyeball: do the `/health` and `/tests` charts render?
+### ~~Needs a human eyeball: do the `/health` and `/tests` charts render?~~ **Resolved 2026-08-01**
 
-Investigated 2026-07-25/26 and **not conclusively resolved.** Confirm by simply
+**They did not, and neither did most of the others.** The cause was not sizing
+and not `ResponsiveContainer`: **Recharts 3.10 entrance animations never
+complete under React 19 here**, and they fail silently.
+
+- A `<Bar>` animates height from 0. Stalled at 0, and `Rectangle` returns `null`
+  for a zero height — so a bar chart rendered axes, a grid, and a set of empty
+  `<g>` elements. Weekly load, steps, sleep, active zone minutes and the
+  handball box score were all blank frames.
+- A `<Line>` is drawn by animating `stroke-dasharray` from `0, total` to
+  `total, 0`. Stalled at `92px, 821px`, so only the first tenth was painted.
+  This is why the weight chart looked like 28 dots joined by a stub, and why
+  charts with few points looked plausible enough to pass inspection.
+
+Fixed by `isAnimationActive={false}` on every series in `TrendChart` and
+`handball/chart.tsx`. `HeartRateChart` already carried the same workaround,
+which is the strongest hint that the problem predates this and was met once
+before without being generalised.
+
+The earlier investigation was looking in the wrong place; the 0×0
+`getBoundingClientRect` readings really were a backgrounded-tab artefact, as
+suspected. The original notes follow.
+
+Investigated 2026-07-25/26 and **not conclusively resolved at the time.** Confirm by simply
 looking at `/health` in a normal focused browser tab.
 
 What is established:
@@ -406,12 +444,16 @@ each time. It is now a stable module-scope component passed as
 Data already in the database that no screen reads. Cheap wins whenever a
 relevant page is next touched:
 
+Most of this list is now closed. What was surfaced on 2026-08-01, and how:
+
 | Data | Status |
 |---|---|
-| `injuries` (whole table) | Never read or written by any screen |
-| `body_metrics.body_fat_percentage` | Synced from Google Health, carried on `daily_facts`, never charted |
-| `body_metrics.height_cm` | Dead column. Height is `users.height_cm`, entered in Settings — the sync and its normaliser were removed, since the value is recorded once and so always falls outside the window |
-| `sleep_logs.sleep_stages` | Stored as jsonb; only total hours shown |
+| `injuries` (whole table) | **Done.** `/log/injury` + `/injuries`, an open-injury banner on the dashboard, and injured days struck through on the heatmap — a light week means the opposite thing depending on whether you were hurt |
+| `body_metrics.body_fat_percentage` | **Done.** Charted on `/trends/body` |
+| `body_metrics.height_cm` | **Dropped** — the column is gone. Height is `users.height_cm`, entered in Settings |
+| `sleep_logs.sleep_stages` | **Done.** The real shape was read off live rows, not the docs: an array of `{type, startTime, endTime}` segments with `LIGHT`/`DEEP`/`REM`/`AWAKE`. `lib/services/sleepStages.ts` sums them; `/trends/body` shows the longest sleep of the last week as a stacked bar with efficiency. Longest rather than latest because naps are `sleep_logs` too, and picking the newest row surfaced a 1h22m afternoon nap labelled "night of" |
+| `sessions.hr_zones` | **Done.** Was four lines of plain text, now the same stacked bar |
+| ~29 `daily_facts` columns fetched and never rendered | **Done.** Eleven with no consumer anywhere were dropped from `DAILY_FACT_COLUMNS` — the largest over-fetch in the app, on the query that runs every page load. They remain columns on the view, so adding one back is a word on one line |
 | `handball_sessions.throws_count` | Written by the practice form as a band midpoint; shown on session detail, not yet trended |
 | 9 of 16 match stats | Enterable and shown per-session, never trended |
 | `strength_test_results.verification_status` | Stored, not selected by `/tests` |

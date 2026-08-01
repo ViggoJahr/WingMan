@@ -91,10 +91,86 @@ export interface TuggWorkoutPlan {
 
 type TuggClient = Awaited<ReturnType<typeof createTuggClient>>["client"]
 
-async function fetchAll<T>(client: TuggClient, table: string): Promise<T[]> {
-  const { data, error } = await client.from(table).select("*")
-  if (error) throw new Error(`TUGG fetch ${table} failed: ${error.message}`)
-  return (data ?? []) as T[]
+/**
+ * PostgREST's default ceiling. A plain `select("*")` returns at most this many
+ * rows and reports success - it does not error, and there is no flag in the
+ * response saying the result was cut short. That is what made this the largest
+ * correctness risk in the repo: it fails silently and gets worse with every
+ * session logged.
+ */
+export const TUGG_PAGE_SIZE = 1000
+
+/**
+ * Guard against an unbounded loop if a page never shrinks - a filter that stops
+ * matching, or a server that ignores `range`. A million rows from TUGG would be
+ * a bug worth failing on rather than paging through forever.
+ */
+const MAX_PAGES = 1000
+
+/**
+ * Minimal shape of what pagination needs, so the loop can be tested against a
+ * fake rather than a live TUGG project.
+ */
+export interface PagedQuery<T> {
+  order: (column: string, opts: { ascending: boolean }) => PagedQuery<T>
+  gte: (column: string, value: string) => PagedQuery<T>
+  range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+}
+
+export interface PagedSource<T> {
+  from: (table: string) => { select: (columns: string) => PagedQuery<T> }
+}
+
+/**
+ * Reads a whole table in pages.
+ *
+ * Ordering by `id` is not cosmetic: `range` without a deterministic sort lets
+ * Postgres return rows in any order per request, so a row can appear on two
+ * pages or none. Every TUGG table has an `id`.
+ */
+export async function fetchPaged<T>(
+  client: PagedSource<T>,
+  table: string,
+  options: { since?: { column: string; value: string } } = {}
+): Promise<T[]> {
+  const rows: T[] = []
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    let query = client.from(table).select("*").order("id", { ascending: true })
+    if (options.since) query = query.gte(options.since.column, options.since.value)
+
+    const from = page * TUGG_PAGE_SIZE
+    const { data, error } = await query.range(from, from + TUGG_PAGE_SIZE - 1)
+    if (error) throw new Error(`TUGG fetch ${table} failed: ${error.message}`)
+
+    const batch = data ?? []
+    rows.push(...batch)
+    // A short page is the only reliable end-of-table signal PostgREST gives.
+    if (batch.length < TUGG_PAGE_SIZE) return rows
+  }
+
+  throw new Error(
+    `TUGG fetch ${table} exceeded ${MAX_PAGES} pages (${MAX_PAGES * TUGG_PAGE_SIZE} rows) - refusing to continue`
+  )
+}
+
+/**
+ * Pagination alone, deliberately - no date window yet.
+ *
+ * The roadmap suggested a cursor mirroring Google Health's SYNC_WINDOW_DAYS.
+ * Paging is what actually fixes the bug, and a window would trade correctness
+ * for a saving that does not yet exist: the largest TUGG sync so far moved 326
+ * rows, and the tables split awkwardly - `exercise_progress`, the one most
+ * likely to grow, has no event date at all, while `test_date` is a `date` and
+ * `start_time` a `timestamptz`, so one cutoff value does not serve both.
+ *
+ * A window also silently skips rows edited after they age out, which is exactly
+ * the class of quiet wrongness being fixed here. `fetchPaged` takes a `since`
+ * option for when volume justifies it; until then, reading everything in pages
+ * is both correct and cheap.
+ */
+function fetchAll<T>(client: TuggClient, table: string): Promise<T[]> {
+  return fetchPaged<T>(client as unknown as PagedSource<T>, table)
 }
 
 export const fetchWorkoutSessions = (client: TuggClient) =>

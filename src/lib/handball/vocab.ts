@@ -39,15 +39,16 @@ export const THROW_BANDS = [
   { value: 110, label: "Lots" },
 ] as const
 
-/** Jump/landing and contact exposure. Matches the 0-3 CHECK on handball_sessions. */
+/**
+ * Jump/landing and contact exposure. Matches the 0-3 CHECK on
+ * handball_sessions. Values are the index, so `loadBandLabel` is a lookup.
+ */
 export const LOAD_BANDS = [
   { value: 0, label: "None" },
   { value: 1, label: "Some" },
   { value: 2, label: "Lots" },
   { value: 3, label: "Max" },
 ] as const
-
-export const LOAD_BAND_LABELS = ["None", "Some", "Lots", "Max"] as const
 
 /** Common durations, so the usual case is one tap rather than typing. */
 export const PRACTICE_DURATIONS = [60, 75, 90, 120] as const
@@ -76,5 +77,5 @@ export function throwBandLabel(count: number | null): string | null {
 /** Renders a 0-3 band to its label, for the session detail view. */
 export function loadBandLabel(value: number | null): string | null {
   if (value == null) return null
-  return LOAD_BAND_LABELS[value] ?? null
+  return LOAD_BANDS[value]?.label ?? null
 }

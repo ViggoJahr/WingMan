@@ -20,6 +20,9 @@ function matchStats(input: MatchInput) {
     play_time_min: input.play_time_min,
     importance: input.importance,
     opposition_difficulty: input.opposition_difficulty,
+    minutes_period_1: input.minutes_period_1,
+    minutes_period_2: input.minutes_period_2,
+    plus_minus: input.plus_minus,
   }
 }
 
@@ -69,6 +72,69 @@ export async function logMatch(_prev: ActionState, formData: FormData): Promise<
   if (matchErr) return failure(matchErr.message, formData)
 
   redirect("/?logged=match")
+}
+
+/**
+ * Adds match detail to a session the sync already created.
+ *
+ * See attachPractice for the reasoning - same problem, same split: the sync
+ * owns start_time / end_time / rpe, so those are left alone and the user's own
+ * intensity goes to manual_rpe.
+ */
+export async function attachMatch(
+  sessionId: string,
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect("/login")
+
+  const parsed = matchSchema.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return validationError(parsed.error, formData)
+  const input = parsed.data
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from("sessions")
+    .select("id, type, handball_sessions(subtype)")
+    .eq("id", sessionId)
+    .maybeSingle()
+  if (fetchErr) return failure(fetchErr.message, formData)
+  if (!existing || existing.type !== "handball") {
+    return failure("That session is not a handball session.", formData)
+  }
+
+  const detail = existing.handball_sessions as unknown as { subtype: string } | null
+  if (detail && detail.subtype !== "individual") {
+    return failure("That session already has practice or match detail.", formData)
+  }
+
+  const { error: rpeErr } = await supabase
+    .from("sessions")
+    .update({ manual_rpe: input.rpe, location: input.location })
+    .eq("id", sessionId)
+  if (rpeErr) return failure(rpeErr.message, formData)
+
+  const { error: handballErr } = await supabase.from("handball_sessions").upsert(
+    {
+      session_id: sessionId,
+      subtype: "match",
+      perceived_performance: input.perceived_performance,
+      perceived_challenge: input.perceived_challenge,
+      comments: input.comments,
+    },
+    { onConflict: "session_id" }
+  )
+  if (handballErr) return failure(handballErr.message, formData)
+
+  const { error: matchErr } = await supabase
+    .from("matches")
+    .upsert({ session_id: sessionId, ...matchStats(input) }, { onConflict: "session_id" })
+  if (matchErr) return failure(matchErr.message, formData)
+
+  redirect(`/sessions/${sessionId}`)
 }
 
 export async function updateMatch(

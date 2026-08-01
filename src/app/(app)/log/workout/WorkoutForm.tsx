@@ -4,21 +4,10 @@ import { useActionState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Field, FieldError, FormAlert, SubmitButton, fieldValue } from "@/components/forms/FormParts"
+import { nowLocalDatetime } from "@/lib/dates"
+import { MANUAL_WORKOUT_TYPES, sessionTypeLabel } from "@/lib/labels"
 import { idleState } from "@/lib/validation/formState"
 import { logWorkout, updateWorkout } from "./actions"
-
-function nowLocalDatetime() {
-  const now = new Date()
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
-  return now.toISOString().slice(0, 16)
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  cardio: "Cardio / sport",
-  strength_power: "Strength",
-  mobility_rehab: "Mobility / rehab",
-  active_rest: "Active rest",
-}
 
 export interface WorkoutDefaults {
   type: string
@@ -53,8 +42,8 @@ export function WorkoutForm({
         {mode === "edit" ? (
           <>
             <p className="text-sm text-muted-foreground">
-              {TYPE_LABEL[defaultValues!.type] ?? defaultValues!.type} (can&apos;t be changed - delete
-              and re-log to change type)
+              {sessionTypeLabel(defaultValues!.type)} (can&apos;t be changed - delete and re-log to
+              change type)
             </p>
             <input type="hidden" name="type" value={defaultValues!.type} />
           </>
@@ -65,10 +54,11 @@ export function WorkoutForm({
             className="h-9 rounded-md border bg-background px-3 text-sm"
             defaultValue={v("type", "cardio")}
           >
-            <option value="cardio">Cardio / sport</option>
-            <option value="strength_power">Strength</option>
-            <option value="mobility_rehab">Mobility / rehab</option>
-            <option value="active_rest">Active rest</option>
+            {MANUAL_WORKOUT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {sessionTypeLabel(type)}
+              </option>
+            ))}
           </select>
         )}
         <FieldError errors={state.fieldErrors?.type} />

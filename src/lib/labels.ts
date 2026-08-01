@@ -28,6 +28,18 @@ export const SESSION_TYPE_LABEL: Record<SessionType, string> = {
   handball: "Handball",
 }
 
+/**
+ * The subset the workout form offers. `handball` has its own dedicated practice
+ * and match forms, and `general_cardio` is the sync layer's "unclassified"
+ * bucket - neither is something you would pick by hand.
+ */
+export const MANUAL_WORKOUT_TYPES = [
+  "cardio",
+  "strength_power",
+  "mobility_rehab",
+  "active_rest",
+] as const satisfies readonly SessionType[]
+
 /** Narrows an untrusted string (a query param) to a known type, or null. */
 export function toSessionType(value: string | undefined): SessionType | null {
   return SESSION_TYPES.find((type) => type === value) ?? null
