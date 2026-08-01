@@ -181,4 +181,11 @@
   :is(dd, td, th, kbd, output, time) {
     font-variant-numeric: tabular-nums;
   }
+  /* Native checkboxes default to the browser's blue, which was the only colour
+     left in the UI that the palette did not own. Set here rather than per
+     instance because they are all raw inputs - the column menu, "pause on tag",
+     "home game" - and none of them wants a bespoke control. */
+  :is(input[type="checkbox"], input[type="radio"]) {
+    accent-color: var(--brand-accent);
+  }
 }

@@ -76,7 +76,7 @@ export default async function TestsPage() {
         </CardHeader>
         <CardContent>
           {masPoints.length > 0 ? (
-            <TrendChart data={masPoints} kind="line" color="chart-2" format={{ decimals: 2, suffix: " m/s" }} />
+            <TrendChart data={masPoints} kind="line" color="chart-1" format={{ decimals: 2, suffix: " m/s" }} />
           ) : (
             <p className="text-sm text-muted-foreground">No MAS test data synced yet.</p>
           )}

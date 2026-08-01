@@ -15,6 +15,8 @@ import {
   intensityCoverage,
 } from "@/lib/services/loadMetrics"
 import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap"
+import { ProgressRing } from "@/components/charts/ProgressRing"
+import { WeekDotStrip } from "@/components/charts/WeekDotStrip"
 import { StatTile, type TileStatus } from "@/components/StatTile"
 import { SessionList, type SessionRowData } from "@/components/SessionRow"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
@@ -136,6 +138,29 @@ export default async function Home({
     marked: f.had_match === true,
   }))
 
+  // Which days of the last week were trained, not just how much in total - the
+  // one thing the tiles cannot say. daily_facts generates a full calendar, so a
+  // rest day is a real zero row and "didn't train" is distinguishable from
+  // "no data", which is the whole point of the strip.
+  const weekMaxLoad = Math.max(...last7.map((f) => num(f.load_estimate) ?? 0), 1)
+  const weekDays = last7.map((f) => {
+    const load = num(f.load_estimate) ?? 0
+    const count = num(f.session_count) ?? 0
+    return {
+      date: f.day,
+      level: (count === 0 ? 0 : load >= weekMaxLoad * 0.5 ? 2 : 1) as 0 | 1 | 2,
+      title:
+        count === 0
+          ? `${f.day} - rest`
+          : `${f.day} - ${count} session${count === 1 ? "" : "s"}, load ${Math.round(load)}`,
+    }
+  })
+  // Rest days, not trained days. Google Health logs every detected walk as a
+  // session, so "days with a session" is 7 most weeks and says nothing. Days
+  // with *no* load is the number that varies - and against an ACWR that is
+  // already ramping, it is the one worth seeing.
+  const restDays = weekDays.filter((d) => d.level === 0).length
+
   // Sessions that still need an RPE, newest first - the one action that
   // actually improves the numbers above.
   const unratedRecent = (sessions ?? []).filter((s) => s.rpe == null && s.manual_rpe == null)
@@ -176,13 +201,39 @@ export default async function Home({
         </Link>
       )}
 
+      <Card>
+        <CardContent className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
+          <ProgressRing
+            value={readinessScore ?? 0}
+            max={100}
+            label="Readiness"
+            display={readinessScore != null ? String(readinessScore) : "-"}
+            caption={readinessScore != null ? "of 100" : "not logged"}
+            tone={
+              readinessScore == null
+                ? "brand"
+                : readinessScore >= 70
+                  ? "good"
+                  : readinessScore >= 50
+                    ? "warning"
+                    : "critical"
+            }
+          />
+          <WeekDotStrip
+            days={weekDays}
+            label={`Last 7 days - ${restDays === 0 ? "no rest days" : `${restDays} rest`}`}
+            className="w-full min-w-0 flex-1"
+          />
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile
           label="Readiness today"
           value={readinessScore != null ? `${readinessScore}` : "-"}
           hint={readinessScore != null ? "out of 100" : "not logged"}
           status={readinessScore != null ? readinessStatus(readinessScore) : "neutral"}
-          href="/readiness"
+          href="/trends/readiness"
           delta={
             percentChange(avgReadiness, prevAvgReadiness) && {
               ...percentChange(avgReadiness, prevAvgReadiness)!,
@@ -204,7 +255,7 @@ export default async function Home({
                 : "needs 28 days"
           }
           status={showAcwr ? acwrStatus(latestMetrics.acwr!) : "neutral"}
-          href="/training-load"
+          href="/trends/load"
           sparkline={
             showAcwr
               ? loadMetrics
@@ -223,7 +274,7 @@ export default async function Home({
               ? `monotony ${latestMetrics.monotony.toFixed(2)}`
               : "partly estimated"
           }
-          href="/training-load"
+          href="/trends/load"
           delta={
             percentChange(weeklyLoad, prevWeeklyLoad) && {
               ...percentChange(weeklyLoad, prevWeeklyLoad)!,
@@ -237,7 +288,7 @@ export default async function Home({
         <StatTile
           label="Sleep (7d avg)"
           value={avgSleep != null ? `${avgSleep.toFixed(1)} h` : "-"}
-          href="/health"
+          href="/trends/body"
           delta={
             percentChange(avgSleep, prevAvgSleep) && {
               ...percentChange(avgSleep, prevAvgSleep)!,
@@ -251,7 +302,7 @@ export default async function Home({
         <StatTile
           label="Avg steps (7d)"
           value={avgSteps != null ? Math.round(avgSteps).toLocaleString() : "-"}
-          href="/health"
+          href="/trends/body"
           delta={
             percentChange(avgSteps, prevAvgSteps) && {
               ...percentChange(avgSteps, prevAvgSteps)!,
@@ -266,7 +317,7 @@ export default async function Home({
           label="Weight"
           value={latestWeight ? `${num(latestWeight.weight_kg)!.toFixed(1)} kg` : "-"}
           hint={latestWeight && latestWeight.day !== today ? `as of ${latestWeight.day}` : undefined}
-          href="/health"
+          href="/trends/body"
           delta={
             latestWeight && priorWeight && priorWeight.day !== latestWeight.day
               ? {

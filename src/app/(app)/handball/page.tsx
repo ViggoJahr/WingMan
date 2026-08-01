@@ -1,11 +1,35 @@
-import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader, PageShell } from "@/components/PageShell"
+import { DataTable, type DataColumn } from "@/components/DataTable"
 import { createClient } from "@/lib/supabase/server"
 import { formatDate } from "@/lib/dates"
 import { fetchMatches, fetchPractices, throwLoad } from "@/lib/services/handball"
 import { POSITION_LABELS, throwBandLabel, type HandballPosition } from "@/lib/handball/vocab"
 import { MatchBoxScoreChart, type MatchBoxScorePoint } from "./chart"
+
+/**
+ * Declared at module scope so the descriptor array is not rebuilt per render,
+ * and so the shape stays obvious: these cross the server/client boundary, which
+ * is why `href` is a template string rather than a render function.
+ */
+const MATCH_COLUMNS: readonly DataColumn[] = [
+  { key: "start_time", header: "Date", href: "/sessions/{session_id}" },
+  { key: "opponent", header: "Opponent", emptyText: "-" },
+  { key: "venue", header: "H/A" },
+  { key: "goals", header: "G", align: "right" },
+  { key: "assists", header: "A", align: "right" },
+  { key: "nine_m_shots", header: "9m", align: "right" },
+  { key: "breakthroughs", header: "Brk", align: "right" },
+  { key: "steals", header: "Steals", align: "right" },
+  { key: "technical_faults", header: "Faults", align: "right" },
+  {
+    key: "clipped_events",
+    header: "Clips",
+    align: "right",
+    href: "/sessions/{session_id}/review",
+    emptyText: "-",
+  },
+]
 
 export default async function HandballPage() {
   const supabase = await createClient()
@@ -74,62 +98,27 @@ export default async function HandballPage() {
           <CardTitle>Match history</CardTitle>
         </CardHeader>
         <CardContent>
-          {matches.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-muted-foreground">
-                  <tr>
-                    <th className="py-1 pr-4">Date</th>
-                    <th className="py-1 pr-4">Opponent</th>
-                    <th className="py-1 pr-4">H/A</th>
-                    <th className="py-1 pr-4">G</th>
-                    <th className="py-1 pr-4">A</th>
-                    <th className="py-1 pr-4">9m</th>
-                    <th className="py-1 pr-4">Brk</th>
-                    <th className="py-1 pr-4">Steals</th>
-                    <th className="py-1 pr-4">Faults</th>
-                    <th className="py-1">Clips</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {matches.map((m) => (
-                    <tr key={m.session_id}>
-                      <td className="py-1 pr-4">
-                        <Link
-                          href={`/sessions/${m.session_id}`}
-                          className="underline-offset-2 hover:underline"
-                        >
-                          {formatDate(m.start_time!)}
-                        </Link>
-                      </td>
-                      <td className="py-1 pr-4">{m.opponent ?? "-"}</td>
-                      <td className="py-1 pr-4">{m.is_home ? "H" : "A"}</td>
-                      <td className="py-1 pr-4 tabular-nums">{m.goals}</td>
-                      <td className="py-1 pr-4 tabular-nums">{m.assists}</td>
-                      <td className="py-1 pr-4 tabular-nums">{m.nine_m_shots}</td>
-                      <td className="py-1 pr-4 tabular-nums">{m.breakthroughs}</td>
-                      <td className="py-1 pr-4 tabular-nums">{m.steals}</td>
-                      <td className="py-1 pr-4 tabular-nums">{m.technical_faults}</td>
-                      <td className="py-1 tabular-nums text-muted-foreground">
-                        {m.clipped_events! > 0 ? (
-                          <Link
-                            href={`/sessions/${m.session_id}/review`}
-                            className="underline-offset-2 hover:underline"
-                          >
-                            {m.clipped_events}
-                          </Link>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No matches logged yet.</p>
-          )}
+          <DataTable
+            exportName="match-history"
+            initialSort="start_time"
+            emptyMessage="No matches logged yet."
+            caption="Match history with box score counters"
+            columns={MATCH_COLUMNS}
+            rows={matches.map((m) => ({
+              id: m.session_id!,
+              session_id: m.session_id!,
+              start_time: formatDate(m.start_time!),
+              opponent: m.opponent,
+              venue: m.is_home ? "H" : "A",
+              goals: m.goals,
+              assists: m.assists,
+              nine_m_shots: m.nine_m_shots,
+              breakthroughs: m.breakthroughs,
+              steals: m.steals,
+              technical_faults: m.technical_faults,
+              clipped_events: m.clipped_events,
+            }))}
+          />
         </CardContent>
       </Card>
 

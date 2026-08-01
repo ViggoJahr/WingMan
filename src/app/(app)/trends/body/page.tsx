@@ -120,7 +120,7 @@ export default async function HealthPage() {
             <TrendChart
               data={restingHrPoints}
               kind="line"
-              color="chart-2"
+              color="chart-1"
               format={{ decimals: 0, suffix: " bpm" }}
             />
           ) : (
@@ -135,7 +135,7 @@ export default async function HealthPage() {
         </CardHeader>
         <CardContent>
           {hrvPoints.length > 0 ? (
-            <TrendChart data={hrvPoints} kind="line" color="chart-3" format={{ decimals: 1, suffix: " ms" }} />
+            <TrendChart data={hrvPoints} kind="line" color="chart-1" format={{ decimals: 1, suffix: " ms" }} />
           ) : (
             <p className="text-sm text-muted-foreground">No HRV data synced yet.</p>
           )}
@@ -151,7 +151,7 @@ export default async function HealthPage() {
             <TrendChart
               data={spo2Points}
               kind="line"
-              color="chart-4"
+              color="chart-1"
               format={{ decimals: 1, suffix: "%" }}
               yDomain={[85, 100]}
             />
@@ -174,7 +174,7 @@ export default async function HealthPage() {
         </CardHeader>
         <CardContent>
           {azmPoints.length > 0 ? (
-            <TrendChart data={azmPoints} kind="bar" color="chart-5" format={{ decimals: 0, suffix: " min" }} />
+            <TrendChart data={azmPoints} kind="bar" color="chart-1" format={{ decimals: 0, suffix: " min" }} />
           ) : (
             <p className="text-sm text-muted-foreground">No active zone minute data synced yet.</p>
           )}
