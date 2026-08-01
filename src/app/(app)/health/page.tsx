@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { isoDaysAgo, timestampDaysAgo } from "@/lib/dates"
 import { TrendChart, type TrendPoint } from "@/components/charts/TrendChart"
 import { SleepChart, StepsChart, WeightChart } from "./charts"
+import { PageHeader, PageShell } from "@/components/PageShell"
 
 function toPoints(rows: Array<{ date: string; value: number | null }>): TrendPoint[] {
   return rows.filter((r) => r.value != null).map((r) => ({ date: r.date, value: r.value! }))
@@ -70,120 +71,120 @@ export default async function HealthPage() {
     : null
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Body &amp; recovery</h1>
-          <p className="text-muted-foreground">Synced from Google Health - last 90 days.</p>
-        </div>
+    <PageShell>
+      <PageHeader
+        title="Body &amp; recovery"
+        description="Synced from Google Health - last 90 days."
+      />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{latestWeight ? `Weight: ${latestWeight.weight_kg} kg` : "Weight"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {weightPoints.length > 0 ? (
-              <WeightChart data={weightPoints} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No weight data synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{latestWeight ? `Weight: ${latestWeight.weight_kg} kg` : "Weight"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {weightPoints.length > 0 ? (
+            <WeightChart data={weightPoints} />
+          ) : (
+            <p className="text-sm text-muted-foreground">No weight data synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{avgSteps ? `Steps: ${avgSteps.toLocaleString()} avg/day` : "Steps"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {stepsPoints.length > 0 ? (
-              <StepsChart data={stepsPoints} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No step data synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{avgSteps ? `Steps: ${avgSteps.toLocaleString()} avg/day` : "Steps"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {stepsPoints.length > 0 ? (
+            <StepsChart data={stepsPoints} />
+          ) : (
+            <p className="text-sm text-muted-foreground">No step data synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{avgSleep ? `Sleep: ${avgSleep}h avg/night` : "Sleep"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {sleepPoints.length > 0 ? (
-              <SleepChart data={sleepPoints} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No sleep data synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{avgSleep ? `Sleep: ${avgSleep}h avg/night` : "Sleep"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {sleepPoints.length > 0 ? (
+            <SleepChart data={sleepPoints} />
+          ) : (
+            <p className="text-sm text-muted-foreground">No sleep data synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{latestRestingHr ? `Resting HR: ${latestRestingHr} bpm` : "Resting heart rate"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {restingHrPoints.length > 0 ? (
-              <TrendChart
-                data={restingHrPoints}
-                kind="line"
-                color="chart-2"
-                format={{ decimals: 0, suffix: " bpm" }}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">No resting heart rate data synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{latestRestingHr ? `Resting HR: ${latestRestingHr} bpm` : "Resting heart rate"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {restingHrPoints.length > 0 ? (
+            <TrendChart
+              data={restingHrPoints}
+              kind="line"
+              color="chart-2"
+              format={{ decimals: 0, suffix: " bpm" }}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">No resting heart rate data synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{latestHrv ? `HRV: ${latestHrv} ms` : "Heart rate variability"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {hrvPoints.length > 0 ? (
-              <TrendChart data={hrvPoints} kind="line" color="chart-3" format={{ decimals: 1, suffix: " ms" }} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No HRV data synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{latestHrv ? `HRV: ${latestHrv} ms` : "Heart rate variability"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {hrvPoints.length > 0 ? (
+            <TrendChart data={hrvPoints} kind="line" color="chart-3" format={{ decimals: 1, suffix: " ms" }} />
+          ) : (
+            <p className="text-sm text-muted-foreground">No HRV data synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{latestSpo2 ? `SpO2: ${latestSpo2}%` : "Blood oxygen (SpO2)"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {spo2Points.length > 0 ? (
-              <TrendChart
-                data={spo2Points}
-                kind="line"
-                color="chart-4"
-                format={{ decimals: 1, suffix: "%" }}
-                yDomain={[85, 100]}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">No SpO2 data synced yet.</p>
-            )}
-            {spo2Points.length > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Daily median of readings between 70-100%, since the sensor emits a literal 50% when it
-                can&apos;t get a reading. Days with too few valid samples are omitted entirely. Wrist-based
-                SpO2 is still an estimate - treat single-day dips as sensor noise unless they persist.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{latestSpo2 ? `SpO2: ${latestSpo2}%` : "Blood oxygen (SpO2)"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {spo2Points.length > 0 ? (
+            <TrendChart
+              data={spo2Points}
+              kind="line"
+              color="chart-4"
+              format={{ decimals: 1, suffix: "%" }}
+              yDomain={[85, 100]}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">No SpO2 data synced yet.</p>
+          )}
+          {spo2Points.length > 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Daily median of readings between 70-100%, since the sensor emits a literal 50% when it
+              can&apos;t get a reading. Days with too few valid samples are omitted entirely. Wrist-based
+              SpO2 is still an estimate - treat single-day dips as sensor noise unless they persist.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{avgAzm != null ? `Active zone min: ${avgAzm} avg/day` : "Active zone minutes"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {azmPoints.length > 0 ? (
-              <TrendChart data={azmPoints} kind="bar" color="chart-5" format={{ decimals: 0, suffix: " min" }} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No active zone minute data synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>{avgAzm != null ? `Active zone min: ${avgAzm} avg/day` : "Active zone minutes"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {azmPoints.length > 0 ? (
+            <TrendChart data={azmPoints} kind="bar" color="chart-5" format={{ decimals: 0, suffix: " min" }} />
+          ) : (
+            <p className="text-sm text-muted-foreground">No active zone minute data synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
+    </PageShell>
   )
 }

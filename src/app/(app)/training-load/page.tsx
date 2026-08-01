@@ -6,6 +6,7 @@ import { aggregateWeeklyLoad } from "@/lib/services/trainingLoad"
 import { CHRONIC_DAYS, intensityCoverage } from "@/lib/services/loadMetrics"
 import { isoDaysAgo } from "@/lib/dates"
 import { TrendChart } from "@/components/charts/TrendChart"
+import { PageHeader, PageShell } from "@/components/PageShell"
 
 const DISPLAY_DAYS = 90
 
@@ -44,14 +45,11 @@ export default async function TrainingLoadPage() {
   }))
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Training load</h1>
-        <p className="text-muted-foreground">
-          Weekly load (effort x duration) across all training, last {DISPLAY_DAYS} days -
-          readiness shown below over the same range to spot correlation.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Training load"
+        description={`Weekly load (effort x duration) across all training, last ${DISPLAY_DAYS} days - readiness shown below over the same range to spot correlation.`}
+      />
       <Card>
         <CardHeader>
           <CardTitle>Weekly load</CardTitle>
@@ -117,6 +115,6 @@ export default async function TrainingLoadPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

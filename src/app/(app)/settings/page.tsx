@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server"
 import { sourceLabel } from "@/lib/labels"
 import { ProfileForm } from "./ProfileForm"
 import { TuggConnectForm } from "./TuggConnectForm"
+import { PageHeader, PageShell } from "@/components/PageShell"
 
 export default async function SettingsPage({
   searchParams,
@@ -24,102 +25,99 @@ export default async function SettingsPage({
   const tugg = accounts?.find((a) => a.source === "tugg")
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Integrations</h1>
-          <p className="text-muted-foreground">Connected data sources and sync status.</p>
-          {connected && (
-            <p className="mt-2 rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
-              Connected {sourceLabel(connected)}.
+    <PageShell>
+      <PageHeader title="Integrations" description="Connected data sources and sync status." />
+
+      {connected && (
+        <p className="rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
+          Connected {sourceLabel(connected)}.
+        </p>
+      )}
+
+      {error && (
+        <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">{error}</p>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Connected sources</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {accounts && accounts.length > 0 ? (
+            <ul className="flex flex-col divide-y text-sm">
+              {accounts.map((a) => (
+                <li key={a.source} className="flex items-center justify-between py-2">
+                  <span className="font-medium">{sourceLabel(a.source)}</span>
+                  <span className="text-muted-foreground">
+                    {a.status}
+                    {a.last_synced_at &&
+                      ` - last synced ${new Date(a.last_synced_at).toLocaleString()}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No sources connected yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Google Health</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Steps, sleep, weight, resting heart rate, and workouts synced from Google Health
+            (Fitbit).
+          </p>
+          <a
+            href="/api/integrations/google_health/authorize"
+            className={cn(buttonVariants({ size: "sm" }), "w-fit")}
+          >
+            {googleHealth ? "Reconnect" : "Connect"} Google Health
+          </a>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>TUGG</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {tugg?.status === "error" && (
+            <p className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm text-status-critical">
+              TUGG&apos;s session has expired. Its refresh tokens rotate on every use and are shared
+              with the TUGG app itself, so signing in there can invalidate this one. Reconnect below.
             </p>
           )}
-          {error && (
-            <p className="mt-2 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
+          <TuggConnectForm isConnected={tugg != null} />
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Connected sources</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {accounts && accounts.length > 0 ? (
-              <ul className="flex flex-col divide-y text-sm">
-                {accounts.map((a) => (
-                  <li key={a.source} className="flex items-center justify-between py-2">
-                    <span className="font-medium">{sourceLabel(a.source)}</span>
-                    <span className="text-muted-foreground">
-                      {a.status}
-                      {a.last_synced_at &&
-                        ` - last synced ${new Date(a.last_synced_at).toLocaleString()}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No sources connected yet.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm
+            defaultValues={{
+              height_cm: profile?.height_cm ?? null,
+              birth_date: profile?.birth_date ?? null,
+              gender: profile?.gender ?? null,
+            }}
+          />
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Google Health</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              Steps, sleep, weight, resting heart rate, and workouts synced from Google Health
-              (Fitbit).
-            </p>
-            <a
-              href="/api/integrations/google_health/authorize"
-              className={cn(buttonVariants({ size: "sm" }), "w-fit")}
-            >
-              {googleHealth ? "Reconnect" : "Connect"} Google Health
-            </a>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>TUGG</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {tugg?.status === "error" && (
-              <p className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm text-status-critical">
-                TUGG&apos;s session has expired. Its refresh tokens rotate on every use and are shared
-                with the TUGG app itself, so signing in there can invalidate this one. Reconnect below.
-              </p>
-            )}
-            <TuggConnectForm isConnected={tugg != null} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Profile</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ProfileForm
-              defaultValues={{
-                height_cm: profile?.height_cm ?? null,
-                birth_date: profile?.birth_date ?? null,
-                gender: profile?.gender ?? null,
-              }}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Appearance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ThemeToggle />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ThemeToggle />
+        </CardContent>
+      </Card>
+    </PageShell>
   )
 }

@@ -73,6 +73,12 @@ npx supabase login      # once, interactive
 npx supabase db push    # apply pending migrations
 ```
 
+> Because regeneration silently drops those hand-maintained entries every time,
+> a migration that only adds or removes a few columns is usually cheaper to
+> reflect by editing `types.ts` directly. Regenerate when the shape of a change
+> is large enough that hand-editing would be error-prone — and then diff the
+> result to confirm `daily_facts` and `app_local_date` survived.
+
 > `20260101000000_baseline_existing_schema.sql` is a pg_dump of the schema as it
 > already existed before this repo had migrations. It documents current state
 > and is marked applied via `supabase migration repair` — **it is not meant to

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/server"
 import { TrendChart } from "@/components/charts/TrendChart"
+import { PageHeader, PageShell } from "@/components/PageShell"
 
 function formatTestType(testType: string) {
   return testType
@@ -31,60 +32,60 @@ export default async function TestsPage() {
     .map((r) => ({ date: r.test_date, value: r.mas_mps! }))
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Tests</h1>
-          <p className="text-muted-foreground">Strength and aerobic-speed test results, synced from TUGG.</p>
-        </div>
+    <PageShell>
+      <PageHeader
+        title="Tests"
+        description="Strength and aerobic-speed test results, synced from TUGG."
+      />
 
-        {Array.from(byType.entries()).map(([testType, rows]) => {
-          const hasOneRm = rows.some((r) => r.estimated_1rm != null)
-          const points = hasOneRm
-            ? rows.filter((r) => r.estimated_1rm != null).map((r) => ({ date: r.test_date, value: r.estimated_1rm! }))
-            : rows.filter((r) => r.reps != null).map((r) => ({ date: r.test_date, value: r.reps! }))
-          const latest = points.at(-1)?.value
-          const unit = hasOneRm ? "kg est. 1RM" : "reps"
+      {Array.from(byType.entries()).map(([testType, rows]) => {
+        const hasOneRm = rows.some((r) => r.estimated_1rm != null)
+        const points = hasOneRm
+          ? rows.filter((r) => r.estimated_1rm != null).map((r) => ({ date: r.test_date, value: r.estimated_1rm! }))
+          : rows.filter((r) => r.reps != null).map((r) => ({ date: r.test_date, value: r.reps! }))
+        const latest = points.at(-1)?.value
+        const unit = hasOneRm ? "kg est. 1RM" : "reps"
 
-          return (
-            <Card key={testType}>
-              <CardHeader>
-                <CardTitle>
-                  {formatTestType(testType)}
-                  {latest != null && `: ${latest} ${unit}`}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {points.length > 0 ? (
-                  <TrendChart
-                    data={points}
-                    kind="line"
-                    color="chart-1"
-                    format={{ suffix: ` ${unit}` }}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">No usable data points for this test.</p>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
+        return (
+          <Card key={testType}>
+            <CardHeader>
+              <CardTitle>
+                {formatTestType(testType)}
+                {latest != null && `: ${latest} ${unit}`}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {points.length > 0 ? (
+                <TrendChart
+                  data={points}
+                  kind="line"
+                  color="chart-1"
+                  format={{ suffix: ` ${unit}` }}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">No usable data points for this test.</p>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>MAS (aerobic speed){masPoints.at(-1) && `: ${masPoints.at(-1)!.value.toFixed(2)} m/s`}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {masPoints.length > 0 ? (
-              <TrendChart data={masPoints} kind="line" color="chart-2" format={{ decimals: 2, suffix: " m/s" }} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No MAS test data synced yet.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>MAS (aerobic speed){masPoints.at(-1) && `: ${masPoints.at(-1)!.value.toFixed(2)} m/s`}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {masPoints.length > 0 ? (
+            <TrendChart data={masPoints} kind="line" color="chart-2" format={{ decimals: 2, suffix: " m/s" }} />
+          ) : (
+            <p className="text-sm text-muted-foreground">No MAS test data synced yet.</p>
+          )}
+        </CardContent>
+      </Card>
 
-        {byType.size === 0 && masPoints.length === 0 && (
-          <p className="text-sm text-muted-foreground">No test results synced yet.</p>
-        )}
-      </div>
+      {byType.size === 0 && masPoints.length === 0 && (
+        <p className="text-sm text-muted-foreground">No test results synced yet.</p>
+      )}
+    </PageShell>
   )
 }

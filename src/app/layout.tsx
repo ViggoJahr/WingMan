@@ -18,11 +18,13 @@ export const metadata: Metadata = {
   description: "Personal training data hub",
 };
 
+// Browser chrome cannot read CSS variables, so these are the sRGB equivalents
+// of --background in each mode. Keep them in step with globals.css.
 export const viewport: Viewport = {
   colorScheme: "dark light",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#090e07" },
+    { media: "(prefers-color-scheme: light)", color: "#f7faf5" },
   ],
 };
 

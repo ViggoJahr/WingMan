@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader, PageShell } from "@/components/PageShell"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
@@ -140,16 +141,14 @@ export default async function Home({
   const unratedRecent = (sessions ?? []).filter((s) => s.rpe == null && s.manual_rpe == null)
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Training Hub</h1>
-        <p className="text-muted-foreground">Signed in as {user?.email}</p>
-        {logged && (
-          <p className="mt-2 rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
-            Saved your {logged} log.
-          </p>
-        )}
-      </div>
+    <PageShell width="wide">
+      <PageHeader title="Training Hub" description={`Signed in as ${user?.email ?? ""}`} />
+
+      {logged && (
+        <p className="rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
+          Saved your {logged} log.
+        </p>
+      )}
 
       {healthWarnings.length > 0 && (
         <div className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm">
@@ -357,6 +356,6 @@ export default async function Home({
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

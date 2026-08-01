@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { formatDateTime } from "@/lib/dates"
 import { sessionTypeLabel, sourceLabel } from "@/lib/labels"
 
 export interface SessionRowData {
@@ -10,10 +11,6 @@ export interface SessionRowData {
   external_source: string | null
   cardio_sessions: { focus: string | null; avg_hr: number | null } | null
   strength_sessions: { focus: string | null } | null
-}
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
 export function SessionRow({ session }: { session: SessionRowData }) {

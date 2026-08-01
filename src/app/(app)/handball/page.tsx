@@ -1,13 +1,11 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { PageHeader, PageShell } from "@/components/PageShell"
 import { createClient } from "@/lib/supabase/server"
+import { formatDate } from "@/lib/dates"
 import { fetchMatches, fetchPractices, throwLoad } from "@/lib/services/handball"
 import { POSITION_LABELS, throwBandLabel, type HandballPosition } from "@/lib/handball/vocab"
 import { MatchBoxScoreChart, type MatchBoxScorePoint } from "./chart"
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-}
 
 export default async function HandballPage() {
   const supabase = await createClient()
@@ -31,11 +29,8 @@ export default async function HandballPage() {
   const throws28d = throwLoad(practices, 28)
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Handball</h1>
-        <p className="text-muted-foreground">Match performance and practice history.</p>
-      </div>
+    <PageShell>
+      <PageHeader title="Handball" description="Match performance and practice history." />
 
       {throws28d > 0 && (
         <Card>
@@ -167,6 +162,6 @@ export default async function HandballPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

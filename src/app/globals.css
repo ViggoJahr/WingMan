@@ -4,20 +4,33 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+ * Palette: one hue, two ends.
+ *
+ * The moodboard pins two colours - Soft Sage #ABC8A2 and Deep Olive #1A2417.
+ * Converted to OKLCH they land on essentially the same hue:
+ *
+ *     Soft Sage   #ABC8A2  ->  oklch(0.801 0.062 139)
+ *     Deep Olive  #1A2417  ->  oklch(0.250 0.031 139)
+ *
+ * So they are not an accent plus an unrelated neutral - they are the light and
+ * dark ends of a single family. Every surface, border and neutral below is
+ * built at hue 139 with the chroma dialled down, which is what stops the UI
+ * reading as grey boxes that happen to sit on a green page. The accent earns
+ * its separation through lightness and chroma, not through a second hue.
+ *
+ * The one deliberate exception is the categorical chart ramp: five series all
+ * in sage would be indistinguishable, so charts 2-5 leave the family. They stay
+ * tonally adjacent, and each step also moves in lightness so the ramp survives
+ * red-green colour deficiency rather than relying on hue alone.
+ * ------------------------------------------------------------------------- */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -28,6 +41,8 @@
   --color-status-warning: var(--status-warning);
   --color-status-critical: var(--status-critical);
   --color-brand: var(--brand-accent);
+  --color-brand-muted: var(--brand-muted);
+  --color-track: var(--track);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -53,86 +68,102 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Light mode. Secondary to dark, and built by inverting the same spine: the
+   pinned Deep Olive becomes the ink rather than the ground. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: #2a78d6;
-  --chart-2: #eb6834;
-  --chart-3: #1baf7a;
-  --chart-4: #eda100;
-  --chart-5: #e87ba4;
-  --chart-grid: #e1e0d9;
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-critical: #d03b3b;
-  /* Single brand hook: rebranding later is a value swap here, not a refactor. */
-  --brand-accent: var(--chart-1);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: oklch(0.976 0.006 139);
+  --foreground: oklch(0.235 0.028 139);
+  --card: oklch(0.996 0.003 139);
+  --card-foreground: oklch(0.235 0.028 139);
+  --popover: oklch(0.996 0.003 139);
+  --popover-foreground: oklch(0.235 0.028 139);
+
+  /* Sage is too light to carry white text, so filled controls use a deeper
+     step of the same hue. --brand-accent stays the pinned sage for arcs,
+     fills and anything that sits on its own. */
+  --primary: oklch(0.505 0.082 139);
+  --primary-foreground: oklch(0.985 0.006 139);
+  --secondary: oklch(0.945 0.012 139);
+  --secondary-foreground: oklch(0.285 0.032 139);
+  --muted: oklch(0.945 0.012 139);
+  --muted-foreground: oklch(0.505 0.020 139);
+  --accent: oklch(0.930 0.018 139);
+  --accent-foreground: oklch(0.235 0.028 139);
+  --destructive: oklch(0.545 0.190 25);
+  --border: oklch(0.235 0.028 139 / 14%);
+  --input: oklch(0.235 0.028 139 / 20%);
+  --ring: oklch(0.505 0.082 139);
+
+  /* Chart 1 is the house colour; 2-5 step away in both hue and lightness. */
+  --chart-1: oklch(0.560 0.088 139);
+  --chart-2: oklch(0.585 0.125 45);
+  --chart-3: oklch(0.575 0.085 205);
+  --chart-4: oklch(0.640 0.120 85);
+  --chart-5: oklch(0.545 0.130 355);
+  --chart-grid: oklch(0.235 0.028 139 / 11%);
+
+  /* Measured against the real page, not assumed: the first pass put warning at
+     2.99:1 and good at 4.36:1 here. Both are rendered as text in the stat
+     tiles, so both have to clear 4.5:1 - which on a near-white ground means
+     considerably darker than their dark-mode counterparts. */
+  --status-good: oklch(0.515 0.145 145);
+  --status-warning: oklch(0.545 0.115 70);
+  --status-critical: oklch(0.525 0.190 25);
+
+  /* The single brand hook. The moodboard's Soft Sage #ABC8A2 is a *dark-mode*
+     value - at 1.71:1 on this ground a sage sparkline is invisible. Light mode
+     therefore takes a deeper step of the same hue, which clears the 3:1 that
+     graphical objects need while still reading as the same green. */
+  --brand-accent: oklch(0.560 0.088 139);
+  --brand-muted: oklch(0.560 0.088 139 / 20%);
+  /* Unfilled remainder of a progress ring, and the rest-day dot. */
+  --track: oklch(0.235 0.028 139 / 10%);
+
+  --radius: 0.75rem;
 }
 
+/* Dark mode - the default. The ground sits below the pinned olive so that
+   olive itself can be the card and still separate from the page. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: #3987e5;
-  --chart-2: #d95926;
-  --chart-3: #199e70;
-  --chart-4: #c98500;
-  --chart-5: #d55181;
-  --chart-grid: #2c2c2a;
-  /* Lifted luminance: the light-mode status colours are too dark to read
-     against oklch(0.145) and were previously reused verbatim here. */
-  --status-good: #3ad13a;
-  --status-warning: #fbbf3c;
-  --status-critical: #f06a6a;
-  --brand-accent: var(--chart-1);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.155 0.017 139);
+  --foreground: oklch(0.965 0.008 139);
+  --card: oklch(0.228 0.026 139);
+  --card-foreground: oklch(0.965 0.008 139);
+  --popover: oklch(0.228 0.026 139);
+  --popover-foreground: oklch(0.965 0.008 139);
+
+  --primary: oklch(0.801 0.062 139);
+  --primary-foreground: oklch(0.190 0.026 139);
+  --secondary: oklch(0.288 0.026 139);
+  --secondary-foreground: oklch(0.965 0.008 139);
+  --muted: oklch(0.288 0.026 139);
+  --muted-foreground: oklch(0.745 0.021 139);
+  --accent: oklch(0.310 0.030 139);
+  --accent-foreground: oklch(0.965 0.008 139);
+  --destructive: oklch(0.690 0.185 22);
+  /* Sage-tinted hairlines, so borders belong to the family rather than
+     reading as neutral white at low alpha. */
+  --border: oklch(0.850 0.030 139 / 13%);
+  --input: oklch(0.850 0.030 139 / 19%);
+  --ring: oklch(0.801 0.062 139);
+
+  --chart-1: oklch(0.801 0.062 139);
+  --chart-2: oklch(0.700 0.115 45);
+  --chart-3: oklch(0.760 0.075 205);
+  --chart-4: oklch(0.850 0.105 85);
+  --chart-5: oklch(0.680 0.120 355);
+  --chart-grid: oklch(0.850 0.030 139 / 11%);
+
+  /* Status colours carry noticeably more chroma than anything in the chrome.
+     On a green-cast UI that saturation is what separates a signal from a
+     surface - hue alone would not, since the whole page is already green. */
+  --status-good: oklch(0.815 0.170 145);
+  --status-warning: oklch(0.835 0.150 75);
+  --status-critical: oklch(0.715 0.175 22);
+
+  --brand-accent: oklch(0.801 0.062 139);
+  --brand-muted: oklch(0.801 0.062 139 / 18%);
+  --track: oklch(0.850 0.030 139 / 12%);
 }
 
 @layer base {
@@ -144,5 +175,10 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Figures are compared column-to-column all over this app - box scores,
+     stat tiles, tables. Proportional digits make those columns ragged. */
+  :is(dd, td, th, kbd, output, time) {
+    font-variant-numeric: tabular-nums;
   }
 }

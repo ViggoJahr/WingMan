@@ -24,12 +24,16 @@ export interface ActivityHeatmapProps {
 
 // Intensity ramp is relative to the athlete's own busiest day in the window,
 // so it stays readable whether they're in pre-season or a taper week.
+//
+// This is a magnitude encoding, so it runs on one hue - the brand sage, faded
+// toward the surface. Rest days use --track, the same "nothing here yet" value
+// the progress rings use for their unfilled arc.
 const LEVEL_FILL = [
-  "var(--muted)",
-  "color-mix(in oklab, var(--chart-3) 28%, transparent)",
-  "color-mix(in oklab, var(--chart-3) 52%, transparent)",
-  "color-mix(in oklab, var(--chart-3) 76%, transparent)",
-  "var(--chart-3)",
+  "var(--track)",
+  "color-mix(in oklab, var(--brand-accent) 28%, transparent)",
+  "color-mix(in oklab, var(--brand-accent) 52%, transparent)",
+  "color-mix(in oklab, var(--brand-accent) 76%, transparent)",
+  "var(--brand-accent)",
 ]
 
 function levelFor(value: number, max: number): number {

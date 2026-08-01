@@ -1,13 +1,10 @@
 "use client"
 
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { formatDate } from "@/lib/dates"
 import { formatValue, type ValueFormat } from "@/lib/valueFormat"
 
 export type { ValueFormat }
-
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-}
 
 /**
  * Declared once at module scope and passed as an element

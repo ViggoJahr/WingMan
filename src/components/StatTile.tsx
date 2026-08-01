@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils"
 export type TileStatus = "good" | "warning" | "critical" | "neutral"
 
 const STATUS_TEXT: Record<TileStatus, string> = {
-  good: "text-[var(--status-good)]",
-  warning: "text-[var(--status-warning)]",
-  critical: "text-[var(--status-critical)]",
+  good: "text-status-good",
+  warning: "text-status-warning",
+  critical: "text-status-critical",
   neutral: "text-foreground",
 }
 
@@ -61,7 +61,7 @@ function Sparkline({ values }: { values: number[] }) {
       <polyline
         points={points}
         fill="none"
-        stroke="var(--chart-1)"
+        stroke="var(--brand-accent)"
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -81,8 +81,8 @@ function Delta({ percent, goodDirection = "none", periodLabel = "vs prev" }: Non
     goodDirection === "none" || direction === "flat"
       ? "text-muted-foreground"
       : direction === goodDirection
-        ? "text-[var(--status-good)]"
-        : "text-[var(--status-critical)]"
+        ? "text-status-good"
+        : "text-status-critical"
 
   return (
     <span className={cn("flex items-center gap-0.5 text-[11px]", tone)}>
