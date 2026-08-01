@@ -21,15 +21,28 @@ export function factNumber(value: number | string | null | undefined): number | 
   return Number.isFinite(n) ? n : null
 }
 
+/**
+ * Only what something actually renders.
+ *
+ * This used to pull all 35 columns while the dashboard displayed six - the
+ * largest over-fetch in the app, on the query that runs on every page load.
+ * Dropped for having no consumer anywhere: total_load, sessions_with_rpe,
+ * max_rpe, total_duration_min, had_practice, had_strength,
+ * readiness_training_load, body_fat_percentage, dow, is_weekend,
+ * days_since_last_match.
+ *
+ * They remain columns on the view, so adding one back is a word on this line -
+ * which is the point of the keystone view, and why removing them costs nothing.
+ * `days_since_last_match` and `dow` in particular are there waiting for the
+ * drivers view; they just should not be paid for until it exists.
+ */
 export const DAILY_FACT_COLUMNS =
-  "day, session_count, total_load, load_estimate, sessions_with_intensity, " +
-  "sessions_with_rpe, max_rpe, total_duration_min, calories_kcal, " +
-  "had_match, had_practice, had_strength, perceived_performance, perceived_challenge, " +
+  "day, session_count, load_estimate, sessions_with_intensity, calories_kcal, " +
+  "had_match, perceived_performance, perceived_challenge, " +
   "readiness_score, muscle_soreness, mental_stress, current_injury, current_illness, " +
-  "sleep_quality, food_beverage, mood, recovery_energy, readiness_training_load, " +
-  "weight_kg, body_fat_percentage, steps, resting_heart_rate, " +
-  "avg_hrv_ms, avg_spo2_percentage, active_zone_minutes, sleep_hours, dow, " +
-  "is_weekend, days_since_last_match"
+  "sleep_quality, food_beverage, mood, recovery_energy, " +
+  "weight_kg, steps, resting_heart_rate, " +
+  "avg_hrv_ms, avg_spo2_percentage, active_zone_minutes, sleep_hours"
 
 /**
  * Reads a trailing window of daily facts, oldest first. RLS on the underlying

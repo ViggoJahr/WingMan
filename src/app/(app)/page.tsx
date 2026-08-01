@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/server"
 import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
 import { fetchDailyFacts, factNumber as num, type DailyFactRow } from "@/lib/services/dailyFacts"
 import { sessionTypeLabel } from "@/lib/labels"
-import { todayIso } from "@/lib/dates"
+import { isoDaysAgo, todayIso } from "@/lib/dates"
+import { injuryDurationDays, injurySiteLabel } from "@/lib/injuries"
 import {
   ACWR_BAND_LABEL,
   acwrBand,
@@ -69,7 +70,7 @@ export default async function Home({
 
   const today = todayIso()
 
-  const [facts, { data: sessions }] = await Promise.all([
+  const [facts, { data: sessions }, { data: injuries }] = await Promise.all([
     fetchDailyFacts(supabase, { days: HISTORY_DAYS }),
     supabase
       .from("sessions")
@@ -79,7 +80,14 @@ export default async function Home({
       .is("merged_into", null)
       .order("start_time", { ascending: false })
       .limit(10),
+    supabase
+      .from("injuries")
+      .select("id, type, grade, injured_date, cleared_date")
+      .gte("injured_date", isoDaysAgo(HISTORY_DAYS))
+      .order("injured_date", { ascending: false }),
   ])
+
+  const openInjuries = (injuries ?? []).filter((i) => i.cleared_date == null)
 
   const last7 = facts.slice(-7)
   const prev7 = facts.slice(-14, -7)
@@ -132,10 +140,19 @@ export default async function Home({
   const latestWeight = weightFacts[weightFacts.length - 1]
   const priorWeight = weightFacts.filter((f) => f.day <= (latestWeight?.day ?? "")).slice(-30)[0]
 
+  // A light week means the opposite thing depending on whether you were hurt,
+  // so the heatmap marks injured days rather than letting a lay-off read as a
+  // taper. An injury with no cleared_date is still open, hence the open end.
+  const injuredOn = (day: string) =>
+    (injuries ?? []).some(
+      (injury) => day >= injury.injured_date && (injury.cleared_date == null || day <= injury.cleared_date)
+    )
+
   const heatmapDays = facts.map((f) => ({
     day: f.day,
     value: num(f.load_estimate) ?? 0,
     marked: f.had_match === true,
+    injured: injuredOn(f.day),
   }))
 
   // Which days of the last week were trained, not just how much in total - the
@@ -189,6 +206,25 @@ export default async function Home({
             ))}
           </ul>
         </div>
+      )}
+
+      {openInjuries.length > 0 && (
+        <Link
+          href="/injuries"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm transition-colors hover:bg-status-critical/15"
+        >
+          <span className="font-medium text-status-critical">
+            {openInjuries.length === 1 ? "Injury open" : `${openInjuries.length} injuries open`}
+          </span>
+          <span className="text-muted-foreground">
+            {openInjuries
+              .map(
+                (injury) =>
+                  `${injurySiteLabel(injury.type)}, day ${injuryDurationDays(injury.injured_date, null)}`
+              )
+              .join(" - ")}
+          </span>
+        </Link>
       )}
 
       {!todaysFact?.readiness_score && (

@@ -444,12 +444,16 @@ each time. It is now a stable module-scope component passed as
 Data already in the database that no screen reads. Cheap wins whenever a
 relevant page is next touched:
 
+Most of this list is now closed. What was surfaced on 2026-08-01, and how:
+
 | Data | Status |
 |---|---|
-| `injuries` (whole table) | Never read or written by any screen |
-| `body_metrics.body_fat_percentage` | Synced from Google Health, carried on `daily_facts`, never charted |
-| `body_metrics.height_cm` | Dead column. Height is `users.height_cm`, entered in Settings — the sync and its normaliser were removed, since the value is recorded once and so always falls outside the window |
-| `sleep_logs.sleep_stages` | Stored as jsonb; only total hours shown |
+| `injuries` (whole table) | **Done.** `/log/injury` + `/injuries`, an open-injury banner on the dashboard, and injured days struck through on the heatmap — a light week means the opposite thing depending on whether you were hurt |
+| `body_metrics.body_fat_percentage` | **Done.** Charted on `/trends/body` |
+| `body_metrics.height_cm` | **Dropped** — the column is gone. Height is `users.height_cm`, entered in Settings |
+| `sleep_logs.sleep_stages` | **Done.** The real shape was read off live rows, not the docs: an array of `{type, startTime, endTime}` segments with `LIGHT`/`DEEP`/`REM`/`AWAKE`. `lib/services/sleepStages.ts` sums them; `/trends/body` shows the longest sleep of the last week as a stacked bar with efficiency. Longest rather than latest because naps are `sleep_logs` too, and picking the newest row surfaced a 1h22m afternoon nap labelled "night of" |
+| `sessions.hr_zones` | **Done.** Was four lines of plain text, now the same stacked bar |
+| ~29 `daily_facts` columns fetched and never rendered | **Done.** Eleven with no consumer anywhere were dropped from `DAILY_FACT_COLUMNS` — the largest over-fetch in the app, on the query that runs every page load. They remain columns on the view, so adding one back is a word on one line |
 | `handball_sessions.throws_count` | Written by the practice form as a band midpoint; shown on session detail, not yet trended |
 | 9 of 16 match stats | Enterable and shown per-session, never trended |
 | `strength_test_results.verification_status` | Stored, not selected by `/tests` |

@@ -2,6 +2,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/server"
 import { isoDaysAgo, timestampDaysAgo } from "@/lib/dates"
 import { TrendChart, type TrendPoint } from "@/components/charts/TrendChart"
+import { StackedBar } from "@/components/charts/StackedBar"
+import {
+  SLEEP_STAGES,
+  SLEEP_STAGE_FILL,
+  SLEEP_STAGE_LABELS,
+  formatMinutes,
+  hasStageDetail,
+  summariseSleepStages,
+} from "@/lib/services/sleepStages"
 import { SleepChart, StepsChart, WeightChart } from "./charts"
 
 function toPoints(rows: Array<{ date: string; value: number | null }>): TrendPoint[] {
@@ -17,8 +26,7 @@ export default async function HealthPage() {
 
   const { data: weightRows } = await supabase
     .from("body_metrics")
-    .select("date, weight_kg")
-    .not("weight_kg", "is", null)
+    .select("date, weight_kg, body_fat_percentage")
     .gte("date", isoDaysAgo(90))
     .order("date", { ascending: true })
 
@@ -30,7 +38,7 @@ export default async function HealthPage() {
 
   const { data: sleepRows } = await supabase
     .from("sleep_logs")
-    .select("start_time, duration_minutes")
+    .select("start_time, duration_minutes, sleep_stages")
     .not("duration_minutes", "is", null)
     .gte("start_time", timestampDaysAgo(90))
     .order("start_time", { ascending: true })
@@ -38,6 +46,12 @@ export default async function HealthPage() {
   const weightPoints = (weightRows ?? [])
     .filter((r) => r.weight_kg != null)
     .map((r) => ({ date: r.date, weight_kg: r.weight_kg! }))
+
+  // Synced from the scale on every weigh-in and never once charted.
+  const bodyFatPoints = toPoints(
+    (weightRows ?? []).map((r) => ({ date: r.date, value: r.body_fat_percentage }))
+  )
+  const latestBodyFat = latestOf(bodyFatPoints)
 
   const stepsPoints = (dailyRows ?? [])
     .filter((r) => r.steps != null)
@@ -49,6 +63,36 @@ export default async function HealthPage() {
       date: r.start_time.slice(0, 10),
       hours: Math.round((r.duration_minutes! / 60) * 10) / 10,
     }))
+
+  // Stage composition, written on every sync since the adapter was built and
+  // read by nothing until now.
+  //
+  // The LONGEST staged sleep in the last week, not the most recent: naps are
+  // recorded as sleep_logs too, and picking the latest row surfaced a 1h22m
+  // afternoon nap as though it were the night. Not every row carries stages
+  // either - some devices do not report them - so this filters to those that do
+  // rather than rendering an empty bar.
+  const recentStagedSleep = (sleepRows ?? [])
+    .filter((row) => row.start_time >= timestampDaysAgo(7))
+    .map((row) => ({ row, composition: summariseSleepStages(row.sleep_stages) }))
+    .filter((entry) => hasStageDetail(entry.composition))
+
+  const latestStagedSleep = recentStagedSleep.reduce<(typeof recentStagedSleep)[number] | undefined>(
+    (longest, entry) =>
+      longest == null || entry.composition.inBedMinutes > longest.composition.inBedMinutes
+        ? entry
+        : longest,
+    undefined
+  )
+
+  const sleepStageSegments = latestStagedSleep
+    ? SLEEP_STAGES.map((stage) => ({
+        key: stage,
+        label: SLEEP_STAGE_LABELS[stage],
+        value: latestStagedSleep.composition.minutes[stage],
+        fill: SLEEP_STAGE_FILL[stage],
+      }))
+    : []
 
   const restingHrPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.resting_heart_rate })))
   const hrvPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.avg_hrv_ms })))
@@ -85,6 +129,24 @@ export default async function HealthPage() {
         </CardContent>
       </Card>
 
+      {bodyFatPoints.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {latestBodyFat != null ? `Body fat: ${latestBodyFat}%` : "Body fat"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TrendChart
+              data={bodyFatPoints}
+              kind="line"
+              color="chart-1"
+              format={{ decimals: 1, suffix: "%" }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>{avgSteps ? `Steps: ${avgSteps.toLocaleString()} avg/day` : "Steps"}</CardTitle>
@@ -110,6 +172,31 @@ export default async function HealthPage() {
           )}
         </CardContent>
       </Card>
+
+      {latestStagedSleep && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Sleep stages
+              {/* Neutral wording: this is whichever sleep was longest, which is
+                  usually but not necessarily the night. */}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                {latestStagedSleep.row.start_time.slice(0, 10)} - longest of the last 7 days
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <StackedBar segments={sleepStageSegments} formatValue={formatMinutes} />
+            <p className="text-xs text-muted-foreground">
+              {formatMinutes(latestStagedSleep.composition.asleepMinutes)} asleep of{" "}
+              {formatMinutes(latestStagedSleep.composition.inBedMinutes)} in bed
+              {latestStagedSleep.composition.efficiency != null &&
+                ` - ${Math.round(latestStagedSleep.composition.efficiency * 100)}% efficiency`}
+              . Segments under 2% are widened to stay visible; the figures above are exact.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

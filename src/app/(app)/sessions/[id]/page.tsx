@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
 import { PageHeader, PageShell } from "@/components/PageShell"
+import { StackedBar } from "@/components/charts/StackedBar"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { formatDateTime } from "@/lib/dates"
@@ -29,6 +30,17 @@ function formatDuration(startIso: string, endIso: string | null) {
 function secToMin(seconds: number | null) {
   return seconds != null ? Math.round(seconds / 60) : null
 }
+
+/**
+ * Ordered light-to-peak, and coloured as one ramp for the same reason the sleep
+ * stages are: these are degrees of one thing, not four separate categories.
+ */
+const HR_ZONES = [
+  { key: "light_sec", label: "Light", fill: "color-mix(in oklab, var(--brand-accent) 30%, transparent)" },
+  { key: "moderate_sec", label: "Moderate", fill: "color-mix(in oklab, var(--brand-accent) 55%, transparent)" },
+  { key: "vigorous_sec", label: "Vigorous", fill: "color-mix(in oklab, var(--brand-accent) 80%, transparent)" },
+  { key: "peak_sec", label: "Peak", fill: "var(--status-warning)" },
+] as const
 
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -214,13 +226,20 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
           {hrZones && (
             <div className="mt-4 border-t pt-4">
-              <p className="mb-2 text-sm font-medium">Heart-rate zones (minutes)</p>
-              <div className="flex gap-4 text-sm text-muted-foreground">
-                <span>Light {secToMin(hrZones.light_sec) ?? 0}m</span>
-                <span>Moderate {secToMin(hrZones.moderate_sec) ?? 0}m</span>
-                <span>Vigorous {secToMin(hrZones.vigorous_sec) ?? 0}m</span>
-                <span>Peak {secToMin(hrZones.peak_sec) ?? 0}m</span>
-              </div>
+              <p className="mb-3 text-sm font-medium">Heart-rate zones</p>
+              {/* Already stored on every synced session; it was four lines of
+                  plain text. Zones are ordered by intensity, not categorical,
+                  so one ramp carries the meaning better than four hues. */}
+              <StackedBar
+                segments={HR_ZONES.map((zone) => ({
+                  key: zone.key,
+                  label: zone.label,
+                  value: secToMin(hrZones[zone.key]) ?? 0,
+                  fill: zone.fill,
+                }))}
+                formatValue={(minutes) => `${minutes}m`}
+                emptyMessage="No zone time recorded for this session."
+              />
             </div>
           )}
         </CardContent>
