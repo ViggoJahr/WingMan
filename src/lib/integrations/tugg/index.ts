@@ -73,7 +73,15 @@ async function sync(
   const { client: tugg, session } = await createTuggClient(refreshToken)
 
   // Refresh rotates tokens; persist the new ones so the next sync still works.
-  await db
+  //
+  // The error check is not defensive boilerplate - it is the difference between
+  // a bad minute and a dead integration. Supabase invalidates the old refresh
+  // token the moment it issues a replacement, so if this write does not land,
+  // the row keeps a token that is already spent and EVERY future run fails with
+  // "Invalid Refresh Token: Already Used" until a human signs in again. It
+  // cannot self-heal, and until this throw existed the run went on to report
+  // success, which is how it stayed invisible for four days.
+  const { error: persistErr } = await db
     .from("integration_accounts")
     .update({
       access_token: encrypt(session.access_token),
@@ -83,6 +91,13 @@ async function sync(
         : null,
     })
     .eq("id", account.id)
+
+  if (persistErr) {
+    throw new Error(
+      `TUGG token refreshed but could not be saved: ${persistErr.message}. ` +
+        "The previous refresh token is now spent, so reconnect TUGG in Settings."
+    )
+  }
 
   const userId = account.user_id
   let itemsSynced = 0

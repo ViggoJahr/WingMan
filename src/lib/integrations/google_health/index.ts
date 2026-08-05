@@ -31,7 +31,12 @@ async function sync(
   const refreshToken = decrypt(account.refresh_token!)
   const tokens = await refreshAccessToken(refreshToken)
 
-  await db
+  // Unlike TUGG, a lost write here is survivable: Google does not rotate the
+  // refresh token, so the stored one stays valid and the next run simply
+  // refreshes again. It is still worth failing on, because a persistent write
+  // failure means the access token and expiry are drifting from reality and the
+  // run below is about to do a lot of work on that basis.
+  const { error: persistErr } = await db
     .from("integration_accounts")
     .update({
       access_token: encrypt(tokens.accessToken),
@@ -40,6 +45,10 @@ async function sync(
       expires_at: tokens.expiresAt,
     })
     .eq("id", account.id)
+
+  if (persistErr) {
+    throw new Error(`Google Health token refreshed but could not be saved: ${persistErr.message}`)
+  }
 
   const userId = account.user_id
   const since = new Date(Date.now() - SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000)
