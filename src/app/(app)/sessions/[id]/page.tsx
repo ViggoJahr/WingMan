@@ -6,6 +6,7 @@ import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
 import { PageHeader, PageShell } from "@/components/PageShell"
 import { StackedBar } from "@/components/charts/StackedBar"
+import { CardSection, Stat, StatGrid } from "@/components/metrics/StatGrid"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
 import { formatDateTime } from "@/lib/dates"
@@ -157,76 +158,50 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <CardTitle>Overview</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-            {duration && (
-              <div>
-                <dt className="text-muted-foreground">Duration</dt>
-                <dd className="font-medium">{duration}</dd>
-              </div>
-            )}
-            {(session.manual_rpe ?? session.rpe) != null && (
-              <div>
-                <dt className="text-muted-foreground">RPE</dt>
-                <dd className="font-medium">
-                  {session.manual_rpe ?? session.rpe}
-                  {session.manual_rpe != null && session.rpe != null && session.manual_rpe !== session.rpe && (
-                    <span className="ml-1 text-xs font-normal text-muted-foreground">
-                      (yours; source said {session.rpe})
-                    </span>
-                  )}
-                </dd>
-              </div>
-            )}
-            {session.calories_kcal != null && (
-              <div>
-                <dt className="text-muted-foreground">Calories</dt>
-                <dd className="font-medium">{session.calories_kcal} kcal</dd>
-              </div>
-            )}
-            {session.active_duration_seconds != null && (
-              <div>
-                <dt className="text-muted-foreground">Active time</dt>
-                <dd className="font-medium">{secToMin(session.active_duration_seconds)}m</dd>
-              </div>
-            )}
-            {session.active_zone_minutes != null && (
-              <div>
-                <dt className="text-muted-foreground">Active zone min</dt>
-                <dd className="font-medium">{session.active_zone_minutes}</dd>
-              </div>
-            )}
-            {cardio?.avg_hr != null && (
-              <div>
-                <dt className="text-muted-foreground">Avg HR</dt>
-                <dd className="font-medium">{cardio.avg_hr} bpm</dd>
-              </div>
-            )}
-            {cardio?.distance_m != null && (
-              <div>
-                <dt className="text-muted-foreground">Distance</dt>
-                <dd className="font-medium">{(cardio.distance_m / 1000).toFixed(2)} km</dd>
-              </div>
-            )}
-            {session.location && (
-              <div>
-                <dt className="text-muted-foreground">Location</dt>
-                <dd className="font-medium">{session.location}</dd>
-              </div>
-            )}
-          </dl>
+          <StatGrid>
+            <Stat label="Duration" value={duration} />
+            <Stat
+              label="RPE"
+              value={session.manual_rpe ?? session.rpe}
+              hint={
+                session.manual_rpe != null &&
+                session.rpe != null &&
+                session.manual_rpe !== session.rpe
+                  ? `yours; source said ${session.rpe}`
+                  : undefined
+              }
+            />
+            <Stat
+              label="Calories"
+              value={session.calories_kcal != null ? `${session.calories_kcal} kcal` : null}
+            />
+            <Stat
+              label="Active time"
+              value={
+                session.active_duration_seconds != null
+                  ? `${secToMin(session.active_duration_seconds)}m`
+                  : null
+              }
+            />
+            <Stat label="Active zone min" value={session.active_zone_minutes} />
+            <Stat label="Avg HR" value={cardio?.avg_hr != null ? `${cardio.avg_hr} bpm` : null} />
+            <Stat
+              label="Distance"
+              value={cardio?.distance_m != null ? `${(cardio.distance_m / 1000).toFixed(2)} km` : null}
+            />
+            <Stat label="Location" value={session.location} />
+          </StatGrid>
 
-          <div className="mt-4 border-t pt-4">
-            <p className="mb-2 text-sm font-medium">Your RPE</p>
+          <CardSection title="Your RPE" className="mt-4">
             <RpeQuickSet
               sessionId={session.id}
               currentRpe={session.manual_rpe}
               syncedRpe={session.rpe}
             />
-          </div>
+          </CardSection>
 
           {hrZones && (
-            <div className="mt-4 border-t pt-4">
-              <p className="mb-3 text-sm font-medium">Heart-rate zones</p>
+            <CardSection title="Heart-rate zones" className="mt-4">
               {/* Already stored on every synced session; it was four lines of
                   plain text. Zones are ordered by intensity, not categorical,
                   so one ramp carries the meaning better than four hues. */}
@@ -240,7 +215,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 formatValue={(minutes) => `${minutes}m`}
                 emptyMessage="No zone time recorded for this session."
               />
-            </div>
+            </CardSection>
           )}
         </CardContent>
       </Card>
@@ -268,10 +243,13 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <CardContent className="flex flex-col gap-4">
             {exerciseGroups.map((group) => (
               <div key={group.exerciseName}>
-                <p className="mb-1 font-medium">{group.exerciseName}</p>
-                <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                <p className="mb-1.5 font-medium">{group.exerciseName}</p>
+                <div className="flex flex-wrap gap-1.5 text-sm">
                   {group.sets.map((s, i) => (
-                    <span key={i} className="rounded-md border px-2 py-1">
+                    <span
+                      key={i}
+                      className="rounded-lg bg-surface-sunken px-2.5 py-1 text-muted-foreground tabular-nums"
+                    >
                       {s.reps ?? "-"} reps{s.weight_kg ? ` @ ${s.weight_kg}kg` : ""}
                     </span>
                   ))}
@@ -326,63 +304,36 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <CardContent className="text-sm">
             {match && (
               <>
-                <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div>
-                    <dt className="text-muted-foreground">Opponent</dt>
-                    <dd className="font-medium">{match.opponent ?? "-"}</dd>
-                  </div>
-                  {match.final_score_us != null && match.final_score_them != null && (
-                    <div>
-                      <dt className="text-muted-foreground">Score</dt>
-                      <dd className="font-medium tabular-nums">
-                        {match.final_score_us}-{match.final_score_them}
-                      </dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt className="text-muted-foreground">Goals</dt>
-                    <dd className="font-medium tabular-nums">{match.goals}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Assists</dt>
-                    <dd className="font-medium tabular-nums">{match.assists}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">9m</dt>
-                    <dd className="font-medium tabular-nums">{match.nine_m_shots}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Breakthroughs</dt>
-                    <dd className="font-medium tabular-nums">{match.breakthroughs}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Steals</dt>
-                    <dd className="font-medium tabular-nums">{match.steals}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Tech faults</dt>
-                    <dd className="font-medium tabular-nums">{match.technical_faults}</dd>
-                  </div>
-                </dl>
+                <StatGrid className="sm:grid-cols-4">
+                  <Stat label="Opponent" value={match.opponent ?? "-"} />
+                  <Stat
+                    label="Score"
+                    value={
+                      match.final_score_us != null && match.final_score_them != null
+                        ? `${match.final_score_us}-${match.final_score_them}`
+                        : null
+                    }
+                  />
+                  <Stat label="Goals" value={match.goals} />
+                  <Stat label="Assists" value={match.assists} />
+                  <Stat label="9m" value={match.nine_m_shots} />
+                  <Stat label="Breakthroughs" value={match.breakthroughs} />
+                  <Stat label="Steals" value={match.steals} />
+                  <Stat label="Tech faults" value={match.technical_faults} />
+                </StatGrid>
                 <Link
                   href={`/sessions/${id}/review`}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
                 >
                   {eventCount > 0 ? `Review video - ${eventCount} events` : "Tag events from video"}
                 </Link>
               </>
             )}
             {practice && (
-              <dl className="grid grid-cols-2 gap-2">
-                <div>
-                  <dt className="text-muted-foreground">Focus</dt>
-                  <dd className="font-medium">{practice.practice_focus ?? "-"}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Complexity</dt>
-                  <dd className="font-medium">{practice.tactical_complexity ?? "-"}</dd>
-                </div>
-              </dl>
+              <StatGrid className="sm:grid-cols-2">
+                <Stat label="Focus" value={practice.practice_focus ?? "-"} />
+                <Stat label="Complexity" value={practice.tactical_complexity ?? "-"} />
+              </StatGrid>
             )}
 
             {/* Tissue-specific dose lives on handball_sessions, so it shows for
@@ -394,40 +345,33 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 handball.jump_load != null ||
                 handball.contact_load != null ||
                 handball.perceived_performance != null) && (
-                <dl className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 sm:grid-cols-5">
-                  <div>
-                    <dt className="text-muted-foreground">Position</dt>
-                    <dd className="font-medium">
-                      {handball.position
-                        ? (POSITION_LABELS[handball.position as HandballPosition] ??
-                          handball.position)
-                        : "-"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Throws</dt>
-                    <dd className="font-medium">{throwBandLabel(handball.throws_count) ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Jumping</dt>
-                    <dd className="font-medium">{loadBandLabel(handball.jump_load) ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Contact</dt>
-                    <dd className="font-medium">{loadBandLabel(handball.contact_load) ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">How it went</dt>
-                    <dd className="font-medium">
-                      {handball.perceived_performance != null
-                        ? `${handball.perceived_performance}/10`
-                        : "-"}
-                    </dd>
-                  </div>
-                </dl>
+                <CardSection title="Tissue load" className="mt-4">
+                  <StatGrid className="sm:grid-cols-5">
+                    <Stat
+                      label="Position"
+                      value={
+                        handball.position
+                          ? (POSITION_LABELS[handball.position as HandballPosition] ??
+                            handball.position)
+                          : "-"
+                      }
+                    />
+                    <Stat label="Throws" value={throwBandLabel(handball.throws_count) ?? "-"} />
+                    <Stat label="Jumping" value={loadBandLabel(handball.jump_load) ?? "-"} />
+                    <Stat label="Contact" value={loadBandLabel(handball.contact_load) ?? "-"} />
+                    <Stat
+                      label="How it went"
+                      value={
+                        handball.perceived_performance != null
+                          ? `${handball.perceived_performance}/10`
+                          : "-"
+                      }
+                    />
+                  </StatGrid>
+                </CardSection>
               )}
 
-            {handball?.comments && <p className="mt-2 text-muted-foreground">{handball.comments}</p>}
+            {handball?.comments && <p className="mt-3 text-muted-foreground">{handball.comments}</p>}
           </CardContent>
         </Card>
       )}

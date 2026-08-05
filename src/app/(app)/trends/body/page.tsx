@@ -1,8 +1,17 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Bed, Droplet, Flame, Footprints, HeartPulse, Moon, Scale, Waves } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { isoDaysAgo, timestampDaysAgo } from "@/lib/dates"
 import { TrendChart, type TrendPoint } from "@/components/charts/TrendChart"
 import { StackedBar } from "@/components/charts/StackedBar"
+import { ChartCard, ChartEmpty } from "@/components/metrics/ChartCard"
+import { MetricHero } from "@/components/metrics/MetricHero"
+import { SectionHeading } from "@/components/metrics/SectionHeading"
+import {
+  BASELINE_WINDOW_DAYS,
+  readMetric,
+  type GoodDirection,
+} from "@/lib/services/metricBaseline"
+import { fetchDaysFor, parseRange, rangeDays } from "@/lib/timeRange"
 import {
   SLEEP_STAGES,
   SLEEP_STAGE_FILL,
@@ -11,58 +20,103 @@ import {
   hasStageDetail,
   summariseSleepStages,
 } from "@/lib/services/sleepStages"
-import { SleepChart, StepsChart, WeightChart } from "./charts"
 
 function toPoints(rows: Array<{ date: string; value: number | null }>): TrendPoint[] {
   return rows.filter((r) => r.value != null).map((r) => ({ date: r.date, value: r.value! }))
 }
 
-function latestOf(points: TrendPoint[]) {
-  return points.at(-1)?.value ?? null
-}
+export default async function BodyTrendsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>
+}) {
+  const range = parseRange((await searchParams).range)
+  // Every series is fetched a full baseline window deeper than it is drawn, so
+  // the band a value is judged against is not built from the same thirty days
+  // the chart is showing.
+  const fetchDays = fetchDaysFor(range, BASELINE_WINDOW_DAYS)
+  const displayFrom = isoDaysAgo(rangeDays(range))
 
-export default async function HealthPage() {
   const supabase = await createClient()
 
-  const { data: weightRows } = await supabase
-    .from("body_metrics")
-    .select("date, weight_kg, body_fat_percentage")
-    .gte("date", isoDaysAgo(90))
-    .order("date", { ascending: true })
+  const [{ data: weightRows }, { data: dailyRows }, { data: sleepRows }] = await Promise.all([
+    supabase
+      .from("body_metrics")
+      .select("date, weight_kg, body_fat_percentage")
+      .gte("date", isoDaysAgo(fetchDays))
+      .order("date", { ascending: true }),
+    supabase
+      .from("daily_metrics")
+      .select("date, steps, resting_heart_rate, avg_hrv_ms, avg_spo2_percentage, active_zone_minutes")
+      .gte("date", isoDaysAgo(fetchDays))
+      .order("date", { ascending: true }),
+    supabase
+      .from("sleep_logs")
+      .select("start_time, duration_minutes, sleep_stages")
+      .not("duration_minutes", "is", null)
+      .gte("start_time", timestampDaysAgo(fetchDays))
+      .order("start_time", { ascending: true }),
+  ])
 
-  const { data: dailyRows } = await supabase
-    .from("daily_metrics")
-    .select("date, steps, resting_heart_rate, avg_hrv_ms, avg_spo2_percentage, active_zone_minutes")
-    .gte("date", isoDaysAgo(90))
-    .order("date", { ascending: true })
+  /**
+   * One series, read two ways: the whole fetched history builds the band, and
+   * only the requested window is drawn. Returning both from one place is what
+   * keeps the verdict in a card's header consistent with the band shaded behind
+   * its chart.
+   */
+  function series(points: TrendPoint[], goodDirection: GoodDirection) {
+    const reading = readMetric(
+      points.slice(-BASELINE_WINDOW_DAYS).map((p) => p.value),
+      goodDirection
+    )
+    return {
+      reading,
+      points: points.filter((p) => p.date >= displayFrom),
+      band: reading.baseline
+        ? { low: reading.baseline.low, high: reading.baseline.high }
+        : null,
+    }
+  }
 
-  const { data: sleepRows } = await supabase
-    .from("sleep_logs")
-    .select("start_time, duration_minutes, sleep_stages")
-    .not("duration_minutes", "is", null)
-    .gte("start_time", timestampDaysAgo(90))
-    .order("start_time", { ascending: true })
-
-  const weightPoints = (weightRows ?? [])
-    .filter((r) => r.weight_kg != null)
-    .map((r) => ({ date: r.date, weight_kg: r.weight_kg! }))
-
-  // Synced from the scale on every weigh-in and never once charted.
-  const bodyFatPoints = toPoints(
-    (weightRows ?? []).map((r) => ({ date: r.date, value: r.body_fat_percentage }))
+  const weight = series(
+    toPoints((weightRows ?? []).map((r) => ({ date: r.date, value: r.weight_kg }))),
+    "none"
   )
-  const latestBodyFat = latestOf(bodyFatPoints)
+  // Synced from the scale on every weigh-in and never once charted.
+  const bodyFat = series(
+    toPoints((weightRows ?? []).map((r) => ({ date: r.date, value: r.body_fat_percentage }))),
+    "none"
+  )
+  const steps = series(
+    toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.steps }))),
+    "up"
+  )
+  const restingHr = series(
+    toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.resting_heart_rate }))),
+    "down"
+  )
+  const hrv = series(
+    toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.avg_hrv_ms }))),
+    "up"
+  )
+  const spo2 = series(
+    toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.avg_spo2_percentage }))),
+    "up"
+  )
+  const azm = series(
+    toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.active_zone_minutes }))),
+    "up"
+  )
 
-  const stepsPoints = (dailyRows ?? [])
-    .filter((r) => r.steps != null)
-    .map((r) => ({ date: r.date, steps: r.steps! }))
-
-  const sleepPoints = (sleepRows ?? [])
-    .filter((r) => r.duration_minutes != null)
-    .map((r) => ({
-      date: r.start_time.slice(0, 10),
-      hours: Math.round((r.duration_minutes! / 60) * 10) / 10,
-    }))
+  const sleep = series(
+    (sleepRows ?? [])
+      .filter((r) => r.duration_minutes != null)
+      .map((r) => ({
+        date: r.start_time.slice(0, 10),
+        value: Math.round((r.duration_minutes! / 60) * 10) / 10,
+      })),
+    "up"
+  )
 
   // Stage composition, written on every sync since the adapter was built and
   // read by nothing until now.
@@ -94,179 +148,248 @@ export default async function HealthPage() {
       }))
     : []
 
-  const restingHrPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.resting_heart_rate })))
-  const hrvPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.avg_hrv_ms })))
-  const spo2Points = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.avg_spo2_percentage })))
-  const azmPoints = toPoints((dailyRows ?? []).map((r) => ({ date: r.date, value: r.active_zone_minutes })))
-
-  const latestWeight = weightPoints.at(-1)
-  const avgSteps = stepsPoints.length
-    ? Math.round(stepsPoints.reduce((sum, p) => sum + p.steps, 0) / stepsPoints.length)
-    : null
-  const avgSleep = sleepPoints.length
-    ? Math.round((sleepPoints.reduce((sum, p) => sum + p.hours, 0) / sleepPoints.length) * 10) / 10
-    : null
-  const latestRestingHr = latestOf(restingHrPoints)
-  const latestHrv = latestOf(hrvPoints)
-  const latestSpo2 = latestOf(spo2Points)
-  const avgAzm = azmPoints.length
-    ? Math.round(azmPoints.reduce((sum, p) => sum + p.value, 0) / azmPoints.length)
-    : null
+  const BAND_NOTE =
+    "The shaded band is your own trailing average plus or minus one standard deviation over the last " +
+    `${BASELINE_WINDOW_DAYS} days - not a population norm, and not a target.`
 
   return (
     <>
+      <SectionHeading>Recovery</SectionHeading>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{latestWeight ? `Weight: ${latestWeight.weight_kg} kg` : "Weight"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {weightPoints.length > 0 ? (
-            <WeightChart data={weightPoints} />
-          ) : (
-            <p className="text-sm text-muted-foreground">No weight data synced yet.</p>
-          )}
-        </CardContent>
-      </Card>
+      <ChartCard
+        hero={
+          <MetricHero
+            icon={HeartPulse}
+            label="Resting heart rate"
+            reading={restingHr.reading}
+            format={(v) => String(Math.round(v))}
+            unit="bpm"
+          />
+        }
+        footnote={BAND_NOTE}
+      >
+        {restingHr.points.length > 0 ? (
+          <TrendChart
+            data={restingHr.points}
+            kind="line"
+            color="chart-1"
+            format={{ decimals: 0, suffix: " bpm" }}
+            band={restingHr.band}
+          />
+        ) : (
+          <ChartEmpty>No resting heart rate data synced yet.</ChartEmpty>
+        )}
+      </ChartCard>
 
-      {bodyFatPoints.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {latestBodyFat != null ? `Body fat: ${latestBodyFat}%` : "Body fat"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TrendChart
-              data={bodyFatPoints}
-              kind="line"
-              color="chart-1"
-              format={{ decimals: 1, suffix: "%" }}
-            />
-          </CardContent>
-        </Card>
-      )}
+      <ChartCard
+        hero={
+          <MetricHero
+            icon={Waves}
+            label="Heart rate variability"
+            reading={hrv.reading}
+            format={(v) => v.toFixed(1)}
+            unit="ms"
+          />
+        }
+        footnote={BAND_NOTE}
+      >
+        {hrv.points.length > 0 ? (
+          <TrendChart
+            data={hrv.points}
+            kind="line"
+            color="chart-1"
+            format={{ decimals: 1, suffix: " ms" }}
+            band={hrv.band}
+          />
+        ) : (
+          <ChartEmpty>No HRV data synced yet.</ChartEmpty>
+        )}
+      </ChartCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{avgSteps ? `Steps: ${avgSteps.toLocaleString()} avg/day` : "Steps"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {stepsPoints.length > 0 ? (
-            <StepsChart data={stepsPoints} />
-          ) : (
-            <p className="text-sm text-muted-foreground">No step data synced yet.</p>
-          )}
-        </CardContent>
-      </Card>
+      <ChartCard
+        hero={
+          <MetricHero
+            icon={Droplet}
+            label="Blood oxygen"
+            reading={spo2.reading}
+            format={(v) => v.toFixed(1)}
+            unit="%"
+          />
+        }
+        footnote={
+          spo2.points.length > 0
+            ? "Daily median of readings between 70-100%, since the sensor emits a literal 50% when it can't get a reading. Days with too few valid samples are omitted entirely. Wrist-based SpO2 is still an estimate - treat single-day dips as sensor noise unless they persist."
+            : undefined
+        }
+      >
+        {spo2.points.length > 0 ? (
+          <TrendChart
+            data={spo2.points}
+            kind="line"
+            color="chart-1"
+            format={{ decimals: 1, suffix: "%" }}
+            yDomain={[85, 100]}
+            band={spo2.band}
+          />
+        ) : (
+          <ChartEmpty>No SpO2 data synced yet.</ChartEmpty>
+        )}
+      </ChartCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{avgSleep ? `Sleep: ${avgSleep}h avg/night` : "Sleep"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sleepPoints.length > 0 ? (
-            <SleepChart data={sleepPoints} />
-          ) : (
-            <p className="text-sm text-muted-foreground">No sleep data synced yet.</p>
-          )}
-        </CardContent>
-      </Card>
+      <SectionHeading>Sleep</SectionHeading>
+
+      <ChartCard
+        hero={
+          <MetricHero
+            icon={Bed}
+            label="Time asleep"
+            reading={sleep.reading}
+            format={(v) => `${v.toFixed(1)}`}
+            unit="hours"
+          />
+        }
+        footnote={BAND_NOTE}
+      >
+        {sleep.points.length > 0 ? (
+          <TrendChart
+            data={sleep.points}
+            kind="bar"
+            color="chart-1"
+            format={{ decimals: 1, suffix: "h" }}
+            band={sleep.band}
+          />
+        ) : (
+          <ChartEmpty>No sleep data synced yet.</ChartEmpty>
+        )}
+      </ChartCard>
 
       {latestStagedSleep && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
+        <ChartCard
+          title={
+            <>
+              <Moon className="mr-1.5 inline size-4 align-[-2px] text-muted-foreground" aria-hidden />
               Sleep stages
               {/* Neutral wording: this is whichever sleep was longest, which is
                   usually but not necessarily the night. */}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 {latestStagedSleep.row.start_time.slice(0, 10)} - longest of the last 7 days
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <StackedBar segments={sleepStageSegments} formatValue={formatMinutes} />
-            <p className="text-xs text-muted-foreground">
+            </>
+          }
+          footnote={
+            <>
               {formatMinutes(latestStagedSleep.composition.asleepMinutes)} asleep of{" "}
               {formatMinutes(latestStagedSleep.composition.inBedMinutes)} in bed
               {latestStagedSleep.composition.efficiency != null &&
                 ` - ${Math.round(latestStagedSleep.composition.efficiency * 100)}% efficiency`}
               . Segments under 2% are widened to stay visible; the figures above are exact.
-            </p>
-          </CardContent>
-        </Card>
+            </>
+          }
+        >
+          <StackedBar segments={sleepStageSegments} formatValue={formatMinutes} />
+        </ChartCard>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{latestRestingHr ? `Resting HR: ${latestRestingHr} bpm` : "Resting heart rate"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {restingHrPoints.length > 0 ? (
-            <TrendChart
-              data={restingHrPoints}
-              kind="line"
-              color="chart-1"
-              format={{ decimals: 0, suffix: " bpm" }}
+      <SectionHeading>Body</SectionHeading>
+
+      <ChartCard
+        hero={
+          <MetricHero
+            icon={Scale}
+            label="Weight"
+            reading={weight.reading}
+            format={(v) => v.toFixed(1)}
+            unit="kg"
+          />
+        }
+        footnote={BAND_NOTE}
+      >
+        {weight.points.length > 0 ? (
+          <TrendChart
+            data={weight.points}
+            kind="line"
+            color="chart-1"
+            format={{ decimals: 1, suffix: " kg" }}
+            band={weight.band}
+          />
+        ) : (
+          <ChartEmpty>No weight data synced yet.</ChartEmpty>
+        )}
+      </ChartCard>
+
+      {bodyFat.points.length > 0 && (
+        <ChartCard
+          hero={
+            <MetricHero
+              icon={Scale}
+              label="Body fat"
+              reading={bodyFat.reading}
+              format={(v) => v.toFixed(1)}
+              unit="%"
             />
-          ) : (
-            <p className="text-sm text-muted-foreground">No resting heart rate data synced yet.</p>
-          )}
-        </CardContent>
-      </Card>
+          }
+          footnote={BAND_NOTE}
+        >
+          <TrendChart
+            data={bodyFat.points}
+            kind="line"
+            color="chart-1"
+            format={{ decimals: 1, suffix: "%" }}
+            band={bodyFat.band}
+          />
+        </ChartCard>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{latestHrv ? `HRV: ${latestHrv} ms` : "Heart rate variability"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {hrvPoints.length > 0 ? (
-            <TrendChart data={hrvPoints} kind="line" color="chart-1" format={{ decimals: 1, suffix: " ms" }} />
-          ) : (
-            <p className="text-sm text-muted-foreground">No HRV data synced yet.</p>
-          )}
-        </CardContent>
-      </Card>
+      <SectionHeading>Daily activity</SectionHeading>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{latestSpo2 ? `SpO2: ${latestSpo2}%` : "Blood oxygen (SpO2)"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {spo2Points.length > 0 ? (
-            <TrendChart
-              data={spo2Points}
-              kind="line"
-              color="chart-1"
-              format={{ decimals: 1, suffix: "%" }}
-              yDomain={[85, 100]}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">No SpO2 data synced yet.</p>
-          )}
-          {spo2Points.length > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Daily median of readings between 70-100%, since the sensor emits a literal 50% when it
-              can&apos;t get a reading. Days with too few valid samples are omitted entirely. Wrist-based
-              SpO2 is still an estimate - treat single-day dips as sensor noise unless they persist.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      <ChartCard
+        hero={
+          <MetricHero
+            icon={Footprints}
+            label="Steps"
+            reading={steps.reading}
+            format={(v) => Math.round(v).toLocaleString()}
+          />
+        }
+        footnote={BAND_NOTE}
+      >
+        {steps.points.length > 0 ? (
+          <TrendChart
+            data={steps.points}
+            kind="bar"
+            color="chart-1"
+            format={{ grouped: true, suffix: " steps" }}
+            band={steps.band}
+          />
+        ) : (
+          <ChartEmpty>No step data synced yet.</ChartEmpty>
+        )}
+      </ChartCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{avgAzm != null ? `Active zone min: ${avgAzm} avg/day` : "Active zone minutes"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {azmPoints.length > 0 ? (
-            <TrendChart data={azmPoints} kind="bar" color="chart-1" format={{ decimals: 0, suffix: " min" }} />
-          ) : (
-            <p className="text-sm text-muted-foreground">No active zone minute data synced yet.</p>
-          )}
-        </CardContent>
-      </Card>
+      <ChartCard
+        hero={
+          <MetricHero
+            icon={Flame}
+            label="Active zone minutes"
+            reading={azm.reading}
+            format={(v) => String(Math.round(v))}
+            unit="min"
+          />
+        }
+        footnote={BAND_NOTE}
+      >
+        {azm.points.length > 0 ? (
+          <TrendChart
+            data={azm.points}
+            kind="bar"
+            color="chart-1"
+            format={{ decimals: 0, suffix: " min" }}
+            band={azm.band}
+          />
+        ) : (
+          <ChartEmpty>No active zone minute data synced yet.</ChartEmpty>
+        )}
+      </ChartCard>
     </>
   )
 }

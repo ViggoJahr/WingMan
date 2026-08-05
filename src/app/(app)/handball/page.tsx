@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader, PageShell } from "@/components/PageShell"
+import { Stat, StatGrid } from "@/components/metrics/StatGrid"
 import { DataTable, type DataColumn } from "@/components/DataTable"
 import { createClient } from "@/lib/supabase/server"
 import { formatDate } from "@/lib/dates"
@@ -62,17 +63,17 @@ export default async function HandballPage() {
             <CardTitle>Throwing volume</CardTitle>
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <dt className="text-muted-foreground">Last 7 days</dt>
-                <dd className="text-2xl font-semibold tabular-nums">{throws7d}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Last 28 days</dt>
-                <dd className="text-2xl font-semibold tabular-nums">{throws28d}</dd>
-              </div>
-            </dl>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <StatGrid className="grid-cols-2 sm:grid-cols-2">
+              <Stat
+                label="Last 7 days"
+                value={<span className="text-3xl">{throws7d}</span>}
+              />
+              <Stat
+                label="Last 28 days"
+                value={<span className="text-3xl">{throws28d}</span>}
+              />
+            </StatGrid>
+            <p className="mt-3 text-xs text-muted-foreground">
               Estimated throws, from the band picked when logging. Shoulder load is a volume
               problem, so the 7-day number matters more than any single session.
             </p>
@@ -130,18 +131,26 @@ export default async function HandballPage() {
           {practices.length > 0 ? (
             <ul className="flex flex-col divide-y text-sm">
               {practices.map((p) => (
-                <li key={p.session_id} className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="font-medium">{p.practice_focus ?? "Practice"}</p>
-                    <p className="text-muted-foreground">
+                <li key={p.session_id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{p.practice_focus ?? "Practice"}</p>
+                    <p className="truncate text-muted-foreground">
                       {formatDate(p.start_time)}
                       {p.position &&
                         ` - ${POSITION_LABELS[p.position as HandballPosition] ?? p.position}`}
                     </p>
                   </div>
-                  <div className="text-right text-muted-foreground">
-                    {throwBandLabel(p.throws_count) && <p>{throwBandLabel(p.throws_count)}</p>}
-                    {p.rpe != null && <p>RPE {p.rpe}</p>}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {throwBandLabel(p.throws_count) && (
+                      <span className="rounded-full bg-surface-sunken px-2.5 py-1 text-xs text-muted-foreground">
+                        {throwBandLabel(p.throws_count)}
+                      </span>
+                    )}
+                    {p.rpe != null && (
+                      <span className="rounded-full bg-brand-muted px-2.5 py-1 text-xs font-medium text-brand tabular-nums">
+                        RPE {p.rpe}
+                      </span>
+                    )}
                   </div>
                 </li>
               ))}

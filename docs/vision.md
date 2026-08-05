@@ -55,6 +55,41 @@ always derive the coarse view from the fine one; never the reverse.
 hook. Rebranding later should mean changing a handful of CSS variables, not
 touching components.
 
+**A number needs a range before it means anything.** *(Added 2026-08-05.)* This
+is the organising idea of the current UI. "60.4 ms" is not high or low until you
+know this athlete runs at 68 ± 7, so almost every figure in the app is now shown
+against a band computed from their own trailing history —
+`lib/services/metricBaseline.ts`, a 60-day mean ± one standard deviation.
+
+That one object drives four things at once, which is what keeps them from
+disagreeing: the verdict line under a figure (`Verdict`), the shading behind a
+sparkline (`Sparkline`), the fill in a range capsule (`RangeGauge`), and the
+`ReferenceArea` behind a full chart (`TrendChart`).
+
+Bands are the athlete's own, never population norms — the only honest version
+for a single user on consumer wearables. Below ten readings no band is produced
+at all and every consumer degrades to a bare figure, rather than showing a
+confident-looking range built from four data points.
+
+**Colour is a verdict, never decoration.** The palette stays single-hue sage;
+what widened in the 2026-08-05 pass is the *status* ramp, because a page that is
+already green cannot signal with hue and has to signal with saturation. The rule
+throughout: the trace is drawn in the metric's colour and only the endpoint
+carries the verdict colour. Colouring a whole 30-day line by today's reading was
+tried and made a row flash red over a month of history — exactly the misreading
+the band exists to prevent.
+
+Direction and judgement are also kept separate. The arrow says which way a
+reading left its range; the colour says whether that is a problem. Weight above
+its band gets an up arrow in the muted tone — the app reports the direction and
+declines to have an opinion, because for weight and training load it does not
+have one.
+
+**Glow belongs to dark mode only.** The lit endpoint is the reference's
+signature and the app's, but on a near-white ground a halo is a smudge. Light
+mode opts out by setting `--glow-blur: 0px` rather than by branching in every
+component.
+
 ---
 
 ## The architectural keystone: `daily_facts`

@@ -1,9 +1,9 @@
 import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Pagination, pageParam, paginationRange, splitPage } from "@/components/Pagination"
 import { createClient } from "@/lib/supabase/server"
 import { cn } from "@/lib/utils"
 import { PageHeader, PageShell } from "@/components/PageShell"
+import { SEGMENTED_GROUP, segmentedItem } from "@/components/metrics/segmented"
 
 const RESOURCE_TYPES = [
   "workout_plan",
@@ -98,51 +98,49 @@ export default async function PlanPage({
         description="TUGG's prescribed/planned workouts - reference only, not editable here."
       />
 
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Link
-          href="/plan"
-          className={cn("rounded-md border px-2 py-1", !type && "bg-accent font-medium")}
-        >
-          All
-        </Link>
-        {RESOURCE_TYPES.map((t) => (
-          <Link
-            key={t}
-            href={`/plan?type=${t}`}
-            className={cn("rounded-md border px-2 py-1", type === t && "bg-accent font-medium")}
-          >
-            {RESOURCE_LABEL[t]}
+      {/* Scrollable rather than wrapping: six filters wrap to three ragged rows
+          on a phone, which reads as a broken layout rather than a control. */}
+      <div className="-mx-4 overflow-x-auto px-4">
+        <nav aria-label="Resource type" className={cn(SEGMENTED_GROUP, "w-max")}>
+          <Link href="/plan" aria-current={!type ? "page" : undefined} className={segmentedItem(!type)}>
+            All
           </Link>
-        ))}
+          {RESOURCE_TYPES.map((t) => (
+            <Link
+              key={t}
+              href={`/plan?type=${t}`}
+              aria-current={type === t ? "page" : undefined}
+              className={segmentedItem(type === t)}
+            >
+              {RESOURCE_LABEL[t]}
+            </Link>
+          ))}
+        </nav>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Items</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {items.length > 0 ? (
-            <ul className="flex flex-col divide-y text-sm">
-              {items.map((item) => {
-                const { title, detail } = renderSummary(item.resource_type, item.payload as Payload)
-                return (
-                  <li key={item.id} className="flex items-center justify-between py-2">
-                    <div>
-                      <p className="font-medium">{title}</p>
-                      {detail && <p className="text-muted-foreground">{detail}</p>}
-                    </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {RESOURCE_LABEL[item.resource_type] ?? item.resource_type}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No planned items synced yet.</p>
-          )}
-        </CardContent>
-      </Card>
+      {items.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {items.map((item) => {
+            const { title, detail } = renderSummary(item.resource_type, item.payload as Payload)
+            return (
+              <li
+                key={item.id}
+                className="flex items-center justify-between gap-3 rounded-xl bg-card p-3.5 text-sm ring-1 ring-foreground/10"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{title}</p>
+                  {detail && <p className="truncate text-muted-foreground">{detail}</p>}
+                </div>
+                <span className="shrink-0 rounded-full bg-surface-sunken px-2.5 py-1 text-xs text-muted-foreground">
+                  {RESOURCE_LABEL[item.resource_type] ?? item.resource_type}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">No planned items synced yet.</p>
+      )}
 
       <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
     </PageShell>

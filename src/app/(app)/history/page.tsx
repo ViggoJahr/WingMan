@@ -1,12 +1,16 @@
 import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { SessionList, type SessionRowData } from "@/components/SessionRow"
+import { SessionMonthGroups, type SessionRowData } from "@/components/SessionRow"
 import { Pagination, pageParam, paginationRange, splitPage } from "@/components/Pagination"
 import { createClient } from "@/lib/supabase/server"
 import { SESSION_TYPES, sessionTypeLabel, sourceLabel, toSessionType } from "@/lib/labels"
 import { PageHeader, PageShell } from "@/components/PageShell"
 
 const PAGE_SIZE = 30
+
+/** Shared by the four filter controls, which previously each carried their own
+ *  copy of the same border/height/padding and had already drifted apart. */
+const FIELD =
+  "h-9 rounded-lg bg-surface-sunken px-2.5 text-sm ring-1 ring-foreground/10 focus:ring-2 focus:ring-brand focus:outline-none"
 
 interface Filters {
   type?: string
@@ -35,7 +39,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const typeFilter = toSessionType(type)
   if (typeFilter) query = query.eq("type", typeFilter)
   if (source === "manual") query = query.is("external_source", null)
-  else if (source === "tugg" || source === "google_health") query = query.eq("external_source", source)
+  else if (source === "tugg" || source === "google_health")
+    query = query.eq("external_source", source)
   if (from) query = query.gte("start_time", new Date(from).toISOString())
   if (to) query = query.lte("start_time", new Date(new Date(to).getTime() + 86_400_000).toISOString())
 
@@ -46,6 +51,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     cardio_sessions: s.cardio_sessions as unknown as SessionRowData["cardio_sessions"],
     strength_sessions: s.strength_sessions as unknown as SessionRowData["strength_sessions"],
   }))
+
+  const hasFilters = Boolean(type || source || from || to)
 
   function pageLink(newPage: number) {
     const params = new URLSearchParams()
@@ -62,10 +69,15 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     <PageShell>
       <PageHeader title="History" description="Every logged session, filterable." />
 
-      <form method="get" className="flex flex-wrap items-end gap-3 text-sm">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="type">Type</label>
-          <select id="type" name="type" defaultValue={type ?? ""} className="h-9 rounded-md border bg-background px-2">
+      <form
+        method="get"
+        className="flex flex-wrap items-end gap-3 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10"
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="type" className="text-xs text-muted-foreground">
+            Type
+          </label>
+          <select id="type" name="type" defaultValue={type ?? ""} className={FIELD}>
             <option value="">All</option>
             {SESSION_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -74,58 +86,46 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="source">Source</label>
-          <select
-            id="source"
-            name="source"
-            defaultValue={source ?? ""}
-            className="h-9 rounded-md border bg-background px-2"
-          >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="source" className="text-xs text-muted-foreground">
+            Source
+          </label>
+          <select id="source" name="source" defaultValue={source ?? ""} className={FIELD}>
             <option value="">All</option>
             <option value="manual">Manual</option>
             <option value="tugg">{sourceLabel("tugg")}</option>
             <option value="google_health">{sourceLabel("google_health")}</option>
           </select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="from">From</label>
-          <input
-            id="from"
-            name="from"
-            type="date"
-            defaultValue={from ?? ""}
-            className="h-9 rounded-md border bg-background px-2"
-          />
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="from" className="text-xs text-muted-foreground">
+            From
+          </label>
+          <input id="from" name="from" type="date" defaultValue={from ?? ""} className={FIELD} />
         </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="to">To</label>
-          <input
-            id="to"
-            name="to"
-            type="date"
-            defaultValue={to ?? ""}
-            className="h-9 rounded-md border bg-background px-2"
-          />
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="to" className="text-xs text-muted-foreground">
+            To
+          </label>
+          <input id="to" name="to" type="date" defaultValue={to ?? ""} className={FIELD} />
         </div>
-        <button type="submit" className="h-9 rounded-md border bg-secondary px-3 text-secondary-foreground">
+        <button
+          type="submit"
+          className="h-9 rounded-lg bg-primary px-4 font-medium text-primary-foreground transition-opacity hover:opacity-90"
+        >
           Filter
         </button>
-        {(type || source || from || to) && (
-          <Link href="/history" className="h-9 content-center underline">
+        {hasFilters && (
+          <Link
+            href="/history"
+            className="h-9 content-center text-muted-foreground underline hover:text-foreground"
+          >
             Clear
           </Link>
         )}
       </form>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sessions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SessionList sessions={sessions} emptyMessage="No sessions match these filters." />
-        </CardContent>
-      </Card>
+      <SessionMonthGroups sessions={sessions} emptyMessage="No sessions match these filters." />
 
       <Pagination page={page} hasNext={hasNext} hrefFor={pageLink} />
     </PageShell>

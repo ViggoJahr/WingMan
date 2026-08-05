@@ -12,10 +12,12 @@ export default async function LoginPage({
   const { error } = await searchParams
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    // The one screen with no navigation and nothing to read, so it gets the
+    // brand wash the rest of the app only uses in small doses.
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-b from-brand-muted/40 to-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Training Hub</CardTitle>
+          <CardTitle className="text-xl">Training Hub</CardTitle>
         </CardHeader>
         <CardContent>
           <form action={login} className="flex flex-col gap-4">
@@ -27,7 +29,11 @@ export default async function LoginPage({
               <Label htmlFor="password">Password</Label>
               <Input id="password" name="password" type="password" required />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p className="rounded-lg bg-status-critical-soft p-2.5 text-sm text-status-critical">
+                {error}
+              </p>
+            )}
             <Button type="submit" className="mt-2">
               Sign in
             </Button>

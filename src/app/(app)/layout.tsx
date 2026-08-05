@@ -10,7 +10,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-1">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col pb-14 sm:pb-0">{children}</div>
+      {/* Clears the floating tab bar - which is taller than the flush bar it
+          replaced, and sits proud of the bottom edge - so the last card on a
+          page is not permanently half-covered. */}
+      <div className="flex min-w-0 flex-1 flex-col pb-24 sm:pb-0">{children}</div>
       <BottomNav />
     </div>
   )

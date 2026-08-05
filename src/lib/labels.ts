@@ -6,6 +6,16 @@
 // Kept free of React so server pages, client components and the session list
 // can all read the same table.
 
+import {
+  Activity,
+  Dumbbell,
+  Footprints,
+  Leaf,
+  StretchHorizontal,
+  Target,
+  type LucideIcon,
+} from "lucide-react"
+
 /** Every sessions.type the app knows about, in the order menus should list them. */
 export const SESSION_TYPES = [
   "strength_power",
@@ -55,6 +65,37 @@ export const SOURCE_LABEL: Record<string, string> = {
 export function sessionTypeLabel(type: string): string {
   return SESSION_TYPE_LABEL[type as SessionType] ?? type
 }
+
+/**
+ * sessions.type -> the glyph the activity list draws in its leading tile.
+ *
+ * Lucide component *references*, not elements, and this module is React-free by
+ * design - so an icon is safe to import anywhere but must not be handed across
+ * the server/client boundary as a prop. Same rule as @/lib/routes: consumers
+ * import this map directly.
+ *
+ * The names live here rather than in SessionRow because /history's filter and
+ * the session detail header want the same glyph, and a second copy would drift
+ * the way the label maps did.
+ *
+ * Exported as a map and read by indexing it, deliberately: a
+ * `sessionTypeIcon(type)` helper reads better but trips
+ * react-hooks/static-components, which cannot distinguish a lookup from a
+ * component factory and assumes any function call returning a component
+ * remounts on every render. Property access is unambiguous to the rule and to
+ * a reader, so the lookup stays at the call site.
+ */
+export const SESSION_TYPE_ICON: Record<SessionType, LucideIcon> = {
+  strength_power: Dumbbell,
+  cardio: Footprints,
+  general_cardio: Activity,
+  mobility_rehab: StretchHorizontal,
+  active_rest: Leaf,
+  handball: Target,
+}
+
+/** What an unmapped `sessions.type` falls back to. */
+export const DEFAULT_SESSION_ICON: LucideIcon = Activity
 
 export function sourceLabel(source: string): string {
   return SOURCE_LABEL[source] ?? source

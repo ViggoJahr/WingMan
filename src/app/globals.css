@@ -4,6 +4,15 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Tailwind's smallest breakpoint is 40rem, which is already a large phone. The
+   reference layouts are two-column at 390px and single-column below it, and
+   several of them have a sparkline that stops being legible before `sm` ever
+   fires - hence a real breakpoint at small-phone width rather than a pile of
+   arbitrary max-width media queries. */
+@theme {
+  --breakpoint-xs: 26rem;
+}
+
 /* ---------------------------------------------------------------------------
  * Palette: one hue, two ends.
  *
@@ -40,9 +49,23 @@
   --color-status-good: var(--status-good);
   --color-status-warning: var(--status-warning);
   --color-status-critical: var(--status-critical);
+  /* Tinted washes behind status text - the chip and band fills. Kept as tokens
+     rather than `/10` opacity utilities because the same wash is needed from
+     inline SVG (gauge tracks, chart areas), where a Tailwind alpha modifier is
+     not available. */
+  --color-status-good-soft: var(--status-good-soft);
+  --color-status-warning-soft: var(--status-warning-soft);
+  --color-status-critical-soft: var(--status-critical-soft);
   --color-brand: var(--brand-accent);
   --color-brand-muted: var(--brand-muted);
+  /* The lighter end of the brand, for the far stop of a ring or area gradient.
+     A gradient between two lightnesses of one hue is what gives the reference
+     arcs their depth; a flat stroke reads as a progress bar bent into a circle. */
+  --color-brand-bright: var(--brand-bright);
   --color-track: var(--track);
+  /* Wells: the unfilled part of a gauge, and the ground under a nested tile. */
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-raised: var(--surface-raised);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -105,10 +128,16 @@
   /* Measured against the real page, not assumed: the first pass put warning at
      2.99:1 and good at 4.36:1 here. Both are rendered as text in the stat
      tiles, so both have to clear 4.5:1 - which on a near-white ground means
-     considerably darker than their dark-mode counterparts. */
-  --status-good: oklch(0.515 0.145 145);
-  --status-warning: oklch(0.545 0.115 70);
-  --status-critical: oklch(0.525 0.190 25);
+     considerably darker than their dark-mode counterparts.
+     Chroma was widened in the second pass so a verdict reads as a verdict on a
+     page that is already green; lightness is untouched, which is the axis the
+     measured contrast actually depends on. */
+  --status-good: oklch(0.515 0.160 145);
+  --status-warning: oklch(0.545 0.140 68);
+  --status-critical: oklch(0.525 0.205 28);
+  --status-good-soft: oklch(0.515 0.160 145 / 12%);
+  --status-warning-soft: oklch(0.545 0.140 68 / 12%);
+  --status-critical-soft: oklch(0.525 0.205 28 / 12%);
 
   /* The single brand hook. The moodboard's Soft Sage #ABC8A2 is a *dark-mode*
      value - at 1.71:1 on this ground a sage sparkline is invisible. Light mode
@@ -116,8 +145,17 @@
      graphical objects need while still reading as the same green. */
   --brand-accent: oklch(0.560 0.088 139);
   --brand-muted: oklch(0.560 0.088 139 / 20%);
+  --brand-bright: oklch(0.700 0.105 139);
   /* Unfilled remainder of a progress ring, and the rest-day dot. */
   --track: oklch(0.235 0.028 139 / 10%);
+  --surface-sunken: oklch(0.235 0.028 139 / 7%);
+  --surface-raised: oklch(0.945 0.012 139);
+
+  /* A glow on a near-white ground is a smudge, not a highlight, so light mode
+     opts out by blurring to nothing rather than by branching in every
+     component. Dark mode is where the reference's lit endpoints belong. */
+  --glow-blur: 0px;
+  --glow-strength: transparent;
 
   --radius: 0.75rem;
 }
@@ -156,14 +194,28 @@
 
   /* Status colours carry noticeably more chroma than anything in the chrome.
      On a green-cast UI that saturation is what separates a signal from a
-     surface - hue alone would not, since the whole page is already green. */
-  --status-good: oklch(0.815 0.170 145);
-  --status-warning: oklch(0.835 0.150 75);
-  --status-critical: oklch(0.715 0.175 22);
+     surface - hue alone would not, since the whole page is already green.
+     Widened further so a verdict line ("Below normal") carries at a glance the
+     way it does in the reference, where the whole point of the trend list is
+     that you scan the colour first and read the number second. Critical also
+     moves toward orange: the reference reserves true red for alarms and uses
+     orange for "outside your usual range", which is what this app means. */
+  --status-good: oklch(0.845 0.215 148);
+  --status-warning: oklch(0.845 0.175 78);
+  --status-critical: oklch(0.720 0.195 38);
+  --status-good-soft: oklch(0.845 0.215 148 / 15%);
+  --status-warning-soft: oklch(0.845 0.175 78 / 15%);
+  --status-critical-soft: oklch(0.720 0.195 38 / 15%);
 
   --brand-accent: oklch(0.801 0.062 139);
   --brand-muted: oklch(0.801 0.062 139 / 18%);
+  --brand-bright: oklch(0.905 0.075 139);
   --track: oklch(0.850 0.030 139 / 12%);
+  --surface-sunken: oklch(0.120 0.014 139);
+  --surface-raised: oklch(0.288 0.026 139);
+
+  --glow-blur: 4px;
+  --glow-strength: currentColor;
 }
 
 @layer base {
@@ -188,4 +240,30 @@
   :is(input[type="checkbox"], input[type="radio"]) {
     accent-color: var(--brand-accent);
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * The lit endpoint.
+ *
+ * Every series in the reference ends in a dot that glows in its own colour -
+ * it is what marks "this is now" against thirty days of history, and it is the
+ * single detail that most makes those screens read as one app. Implemented as
+ * a filter on `currentColor` so a caller only has to set the colour once and
+ * the halo follows, and gated through --glow-blur so light mode gets the dot
+ * without the smudge.
+ * ------------------------------------------------------------------------- */
+@utility glow {
+  filter: drop-shadow(0 0 var(--glow-blur) var(--glow-strength));
+}
+
+/**
+ * Half strength, for anything with a large lit area rather than a point.
+ *
+ * A 6px halo on a 4px dot is a highlight; the same halo on the full
+ * circumference of a progress ring is a neon sign, because the glow scales
+ * with the lit perimeter and the ring has two orders of magnitude more of it.
+ * Rings and gauge markers take this; sparkline endpoints take the full one.
+ */
+@utility glow-soft {
+  filter: drop-shadow(0 0 calc(var(--glow-blur) * 0.5) var(--glow-strength));
 }

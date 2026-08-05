@@ -1,11 +1,33 @@
 import Link from "next/link"
-import { buttonVariants } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Activity,
+  Bed,
+  CircleAlert,
+  Droplet,
+  Flame,
+  Footprints,
+  Gauge,
+  HeartPulse,
+  Plus,
+  Scale,
+  Sparkles,
+  TrendingUp,
+  Waves,
+} from "lucide-react"
 import { PageHeader, PageShell } from "@/components/PageShell"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/server"
-import { READINESS_DIMENSIONS, WARNING_THRESHOLD, describeValue } from "@/lib/services/readinessDimensions"
-import { fetchDailyFacts, factNumber as num, type DailyFactRow } from "@/lib/services/dailyFacts"
+import {
+  READINESS_DIMENSIONS,
+  WARNING_THRESHOLD,
+  describeValue,
+} from "@/lib/services/readinessDimensions"
+import {
+  factNumber as num,
+  factSeries,
+  fetchDailyFacts,
+  type DailyFactRow,
+} from "@/lib/services/dailyFacts"
 import { sessionTypeLabel } from "@/lib/labels"
 import { isoDaysAgo, todayIso } from "@/lib/dates"
 import { injuryDurationDays, injurySiteLabel } from "@/lib/injuries"
@@ -15,44 +37,62 @@ import {
   computeLoadMetrics,
   intensityCoverage,
 } from "@/lib/services/loadMetrics"
+import {
+  BASELINE_WINDOW_DAYS,
+  readMetric,
+  type GoodDirection,
+  type MetricReading,
+} from "@/lib/services/metricBaseline"
+import { buildInsights, countShortNightStreak } from "@/lib/services/insights"
 import { ActivityHeatmap } from "@/components/charts/ActivityHeatmap"
-import { ProgressRing } from "@/components/charts/ProgressRing"
+import { ProgressRing, RingGroup } from "@/components/charts/ProgressRing"
 import { WeekDotStrip } from "@/components/charts/WeekDotStrip"
-import { StatTile, type TileStatus } from "@/components/StatTile"
+import { SectionHeading } from "@/components/metrics/SectionHeading"
+import { InsightCard } from "@/components/metrics/InsightCard"
+import { HealthTile, HealthTileGrid } from "@/components/metrics/HealthTile"
+import { MetricList, MetricRow } from "@/components/metrics/MetricRow"
 import { SessionList, type SessionRowData } from "@/components/SessionRow"
 import { RpeQuickSet } from "@/components/RpeQuickSet"
 
-// The heatmap shows 26 weeks; ACWR needs 28 days of history before that to be
-// meaningful, so pull a little over 200 days in one query.
+// The heatmap shows recent calendar months; ACWR needs 28 days of history
+// before that, and the metric bands need BASELINE_WINDOW_DAYS, so pull a little
+// over 200 days in one query and slice it locally.
 const HISTORY_DAYS = 210
-const HEATMAP_WEEKS = 26
+const HEATMAP_MONTHS = 2
 const CHRONIC_WINDOW_DAYS = 28
+
+/** How much history each sparkline draws. Long enough to show a shape, short
+ *  enough that a 120px trace is not a solid block. */
+const SPARK_DAYS = 30
+
+/**
+ * The sleep ring needs a target to be a ring at all. Eight hours is the common
+ * adult recommendation rather than anything this app has measured, which is why
+ * the *verdict* under every sleep figure comes from the athlete's own baseline
+ * instead - the ring is a target, the band is the truth.
+ */
+const SLEEP_TARGET_HOURS = 8
+
+/**
+ * The load ring is ACWR as a percentage of chronic base, and 150% is where the
+ * "spike" band starts. Filling the ring therefore means "you are at the top of
+ * the sensible range", not "you have completed something".
+ */
+const LOAD_RING_MAX = 150
 
 function sumOf(rows: DailyFactRow[], key: keyof DailyFactRow): number {
   return rows.reduce((acc, row) => acc + (num(row[key] as number | null) ?? 0), 0)
 }
 
-function averageOf(rows: DailyFactRow[], key: keyof DailyFactRow): number | null {
-  const values = rows.map((r) => num(r[key] as number | null)).filter((v): v is number => v != null)
-  if (values.length === 0) return null
-  return values.reduce((a, b) => a + b, 0) / values.length
-}
-
-function percentChange(current: number | null, previous: number | null) {
-  if (current == null || previous == null || previous === 0) return undefined
-  return { percent: ((current - previous) / Math.abs(previous)) * 100 }
-}
-
-function readinessStatus(score: number): TileStatus {
+function ringTone(score: number): "good" | "warning" | "critical" {
   if (score >= 70) return "good"
   if (score >= 50) return "warning"
   return "critical"
 }
 
-function acwrStatus(acwr: number): TileStatus {
+function acwrTone(acwr: number): "good" | "warning" | "critical" {
   const band = acwrBand(acwr)
   if (band === "optimal") return "good"
-  if (band === "caution") return "warning"
   if (band === "high") return "critical"
   return "warning"
 }
@@ -90,7 +130,20 @@ export default async function Home({
   const openInjuries = (injuries ?? []).filter((i) => i.cleared_date == null)
 
   const last7 = facts.slice(-7)
-  const prev7 = facts.slice(-14, -7)
+
+  /**
+   * One column, read two ways: a long window for the band and a short one for
+   * the trace. They have to come from the same array or the verdict under a
+   * figure could disagree with the sparkline beside it.
+   */
+  function metric(key: keyof DailyFactRow, goodDirection: GoodDirection) {
+    const values = factSeries(facts, key)
+    return {
+      reading: readMetric(values.slice(-BASELINE_WINDOW_DAYS), goodDirection),
+      series: values.slice(-SPARK_DAYS),
+      full: values,
+    }
+  }
 
   // Load is driven by load_estimate, not the strictly-measured total_load: only
   // ~26% of sessions carry an RPE, so total_load alone reports most training
@@ -109,6 +162,7 @@ export default async function Home({
   // not the training, so it is withheld rather than shown as a confident band.
   const coverage = intensityCoverage(loadSeries.slice(-CHRONIC_WINDOW_DAYS))
   const showAcwr = coverage.sufficient && latestMetrics?.acwr != null
+  const acwr = showAcwr ? latestMetrics.acwr! : null
 
   const todaysFact = facts.find((f) => f.day === today)
   const latestReadinessFact = [...facts].reverse().find((f) => f.readiness_score != null)
@@ -118,34 +172,52 @@ export default async function Home({
   const healthWarnings = latestReadinessFact
     ? [
         (num(latestReadinessFact.current_injury) ?? 0) >= WARNING_THRESHOLD
-          ? { label: "Injury", description: describeValue(injuryDim, num(latestReadinessFact.current_injury)!) }
+          ? {
+              label: "Injury",
+              description: describeValue(injuryDim, num(latestReadinessFact.current_injury)!),
+            }
           : null,
         (num(latestReadinessFact.current_illness) ?? 0) >= WARNING_THRESHOLD
-          ? { label: "Illness", description: describeValue(illnessDim, num(latestReadinessFact.current_illness)!) }
+          ? {
+              label: "Illness",
+              description: describeValue(illnessDim, num(latestReadinessFact.current_illness)!),
+            }
           : null,
       ].filter((w): w is { label: string; description: string } => w != null)
     : []
 
-  const weeklyLoad = sumOf(last7, "load_estimate")
-  const prevWeeklyLoad = sumOf(prev7, "load_estimate")
-  const avgSteps = averageOf(last7, "steps")
-  const prevAvgSteps = averageOf(prev7, "steps")
-  const avgSleep = averageOf(last7, "sleep_hours")
-  const prevAvgSleep = averageOf(prev7, "sleep_hours")
-  const readinessScore = num(todaysFact?.readiness_score)
-  const avgReadiness = averageOf(last7, "readiness_score")
-  const prevAvgReadiness = averageOf(prev7, "readiness_score")
+  const readiness = metric("readiness_score", "up")
+  const sleep = metric("sleep_hours", "up")
+  const steps = metric("steps", "up")
+  const restingHr = metric("resting_heart_rate", "down")
+  const hrv = metric("avg_hrv_ms", "up")
+  const spo2 = metric("avg_spo2_percentage", "up")
+  const weight = metric("weight_kg", "none")
+  const calories = metric("calories_kcal", "none")
 
-  const weightFacts = facts.filter((f) => num(f.weight_kg) != null)
-  const latestWeight = weightFacts[weightFacts.length - 1]
-  const priorWeight = weightFacts.filter((f) => f.day <= (latestWeight?.day ?? "")).slice(-30)[0]
+  const weeklyLoad = sumOf(last7, "load_estimate")
+
+  // Load has no "normal range" in the baseline sense - a rest day is a real
+  // zero, not a low reading - so its row carries the trace without a band and
+  // takes its verdict from ACWR instead.
+  const loadSpark = facts.slice(-SPARK_DAYS).map((f) => num(f.load_estimate) ?? 0)
+  const loadReading: MetricReading = {
+    latest: weeklyLoad,
+    baseline: null,
+    deviation: null,
+    tone: acwr != null ? acwrTone(acwr) : "neutral",
+    label: null,
+  }
+
+  const readinessScore = num(todaysFact?.readiness_score)
 
   // A light week means the opposite thing depending on whether you were hurt,
   // so the heatmap marks injured days rather than letting a lay-off read as a
   // taper. An injury with no cleared_date is still open, hence the open end.
   const injuredOn = (day: string) =>
     (injuries ?? []).some(
-      (injury) => day >= injury.injured_date && (injury.cleared_date == null || day <= injury.cleared_date)
+      (injury) =>
+        day >= injury.injured_date && (injury.cleared_date == null || day <= injury.cleared_date)
     )
 
   const heatmapDays = facts.map((f) => ({
@@ -178,27 +250,56 @@ export default async function Home({
   // already ramping, it is the one worth seeing.
   const restDays = weekDays.filter((d) => d.level === 0).length
 
+  const insights = buildInsights({
+    acwr,
+    weeklyLoad,
+    restDays,
+    readiness: { value: readiness.reading.latest, deviation: readiness.reading.deviation },
+    sleep: { value: sleep.reading.latest, deviation: sleep.reading.deviation },
+    shortNightStreak: sleep.reading.baseline
+      ? countShortNightStreak(sleep.full, sleep.reading.baseline.low)
+      : 0,
+  })
+
   // Sessions that still need an RPE, newest first - the one action that
   // actually improves the numbers above.
   const unratedRecent = (sessions ?? []).filter((s) => s.rpe == null && s.manual_rpe == null)
 
+  const sessionRows = (sessions ?? []).map((s) => ({
+    ...s,
+    cardio_sessions: s.cardio_sessions as unknown as SessionRowData["cardio_sessions"],
+    strength_sessions: s.strength_sessions as unknown as SessionRowData["strength_sessions"],
+  }))
+
+  const sleepHours = sleep.reading.latest
+
   return (
     <PageShell width="wide">
-      <PageHeader title="Training Hub" description={`Signed in as ${user?.email ?? ""}`} />
+      <PageHeader
+        title={new Date().toLocaleDateString(undefined, {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        })}
+        description={user?.email ?? undefined}
+      />
 
       {logged && (
-        <p className="rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
+        <p className="rounded-xl bg-status-good-soft p-3 text-sm text-status-good">
           Saved your {logged} log.
         </p>
       )}
 
       {healthWarnings.length > 0 && (
-        <div className="rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm">
-          <p className="font-medium text-status-critical">
+        <div className="rounded-xl bg-status-critical-soft p-3.5 text-sm ring-1 ring-status-critical/30">
+          <p className="flex items-center gap-1.5 font-medium text-status-critical">
+            <CircleAlert className="size-4 shrink-0" aria-hidden />
             Consider adjusting training
-            {latestReadinessFact && latestReadinessFact.day !== today && ` (from ${latestReadinessFact.day})`}
+            {latestReadinessFact &&
+              latestReadinessFact.day !== today &&
+              ` (from ${latestReadinessFact.day})`}
           </p>
-          <ul className="mt-1 list-disc pl-5 text-foreground">
+          <ul className="mt-1.5 list-disc pl-5 text-foreground">
             {healthWarnings.map((w) => (
               <li key={w.label}>
                 <span className="font-medium">{w.label}:</span> {w.description}
@@ -211,7 +312,7 @@ export default async function Home({
       {openInjuries.length > 0 && (
         <Link
           href="/injuries"
-          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-status-critical/50 bg-status-critical/10 p-3 text-sm transition-colors hover:bg-status-critical/15"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-status-critical-soft p-3.5 text-sm ring-1 ring-status-critical/30 transition-colors hover:bg-status-critical/20"
         >
           <span className="font-medium text-status-critical">
             {openInjuries.length === 1 ? "Injury open" : `${openInjuries.length} injuries open`}
@@ -227,152 +328,195 @@ export default async function Home({
         </Link>
       )}
 
+      {/* The reference's three-ring header, mapped onto what this app measures:
+          how ready you are, how hard the week has been relative to your base,
+          and last night. */}
+      <RingGroup>
+        <ProgressRing
+          value={readinessScore ?? 0}
+          max={100}
+          label="Readiness"
+          display={readinessScore != null ? String(readinessScore) : "-"}
+          caption={readinessScore != null ? "of 100" : "not logged"}
+          tone={readinessScore == null ? "neutral" : ringTone(readinessScore)}
+        />
+        <ProgressRing
+          value={acwr != null ? acwr * 100 : 0}
+          max={LOAD_RING_MAX}
+          label="Load"
+          display={acwr != null ? acwr.toFixed(2) : "-"}
+          caption={acwr != null ? ACWR_BAND_LABEL[acwrBand(acwr)] : "needs RPE"}
+          tone={acwr != null ? acwrTone(acwr) : "neutral"}
+        />
+        <ProgressRing
+          value={sleepHours ?? 0}
+          max={SLEEP_TARGET_HOURS}
+          label="Sleep"
+          display={sleepHours != null ? `${sleepHours.toFixed(1)}h` : "-"}
+          caption={sleepHours != null ? `of ${SLEEP_TARGET_HOURS}h` : "no data"}
+          tone={sleep.reading.deviation ? sleep.reading.tone : "neutral"}
+        />
+      </RingGroup>
+
+      {insights.map((insight) => (
+        <InsightCard
+          key={insight.key}
+          icon={
+            insight.tone === "good"
+              ? Sparkles
+              : insight.tone === "brand"
+                ? TrendingUp
+                : CircleAlert
+          }
+          tone={insight.tone}
+          headline={insight.headline}
+          body={insight.body}
+          href={insight.href}
+          hrefLabel={insight.hrefLabel}
+        />
+      ))}
+
       {!todaysFact?.readiness_score && (
         <Link
           href="/log/readiness"
-          className="rounded-md border border-dashed p-4 text-sm hover:bg-accent"
+          className="flex items-center gap-3 rounded-xl bg-card p-4 text-sm ring-1 ring-brand/30 transition-colors hover:bg-accent"
         >
-          <span className="font-medium">You haven&apos;t logged readiness today.</span>{" "}
-          <span className="text-muted-foreground">Tap to check in.</span>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-muted text-brand">
+            <Gauge className="size-4" aria-hidden />
+          </span>
+          <span>
+            <span className="font-medium">You haven&apos;t logged readiness today.</span>{" "}
+            <span className="text-muted-foreground">Tap to check in.</span>
+          </span>
         </Link>
       )}
 
-      <Card>
-        <CardContent className="flex flex-col items-center gap-6 sm:flex-row sm:gap-8">
-          <ProgressRing
-            value={readinessScore ?? 0}
-            max={100}
-            label="Readiness"
-            display={readinessScore != null ? String(readinessScore) : "-"}
-            caption={readinessScore != null ? "of 100" : "not logged"}
-            tone={
-              readinessScore == null
-                ? "brand"
-                : readinessScore >= 70
-                  ? "good"
-                  : readinessScore >= 50
-                    ? "warning"
-                    : "critical"
-            }
-          />
-          <WeekDotStrip
-            days={weekDays}
-            label={`Last 7 days - ${restDays === 0 ? "no rest days" : `${restDays} rest`}`}
-            className="w-full min-w-0 flex-1"
-          />
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile
-          label="Readiness today"
-          value={readinessScore != null ? `${readinessScore}` : "-"}
-          hint={readinessScore != null ? "out of 100" : "not logged"}
-          status={readinessScore != null ? readinessStatus(readinessScore) : "neutral"}
-          href="/trends/readiness"
-          delta={
-            percentChange(avgReadiness, prevAvgReadiness) && {
-              ...percentChange(avgReadiness, prevAvgReadiness)!,
-              goodDirection: "up",
-              periodLabel: "7d avg",
-            }
-          }
-          sparkline={facts.slice(-28).map((f) => num(f.readiness_score) ?? 0)}
-        />
-
-        <StatTile
-          label="Acute:chronic load"
-          value={showAcwr ? latestMetrics.acwr!.toFixed(2) : "-"}
-          hint={
-            showAcwr
-              ? ACWR_BAND_LABEL[acwrBand(latestMetrics.acwr!)]
-              : coverage.coverage != null && !coverage.sufficient
-                ? `needs RPE on more sessions (${Math.round(coverage.coverage * 100)}% have it)`
-                : "needs 28 days"
-          }
-          status={showAcwr ? acwrStatus(latestMetrics.acwr!) : "neutral"}
-          href="/trends/load"
-          sparkline={
-            showAcwr
-              ? loadMetrics
-                  .slice(-28)
-                  .map((m) => m.acwr)
-                  .filter((v): v is number => v != null)
-              : undefined
-          }
-        />
-
-        <StatTile
-          label="Load (7d)"
-          value={Math.round(weeklyLoad).toString()}
-          hint={
-            coverage.sufficient && latestMetrics?.monotony != null
-              ? `monotony ${latestMetrics.monotony.toFixed(2)}`
-              : "partly estimated"
-          }
-          href="/trends/load"
-          delta={
-            percentChange(weeklyLoad, prevWeeklyLoad) && {
-              ...percentChange(weeklyLoad, prevWeeklyLoad)!,
-              goodDirection: "none",
-              periodLabel: "vs prev 7d",
-            }
-          }
-          sparkline={facts.slice(-28).map((f) => num(f.load_estimate) ?? 0)}
-        />
-
-        <StatTile
-          label="Sleep (7d avg)"
-          value={avgSleep != null ? `${avgSleep.toFixed(1)} h` : "-"}
-          href="/trends/body"
-          delta={
-            percentChange(avgSleep, prevAvgSleep) && {
-              ...percentChange(avgSleep, prevAvgSleep)!,
-              goodDirection: "up",
-              periodLabel: "vs prev 7d",
-            }
-          }
-          sparkline={facts.slice(-28).map((f) => num(f.sleep_hours) ?? 0)}
-        />
-
-        <StatTile
-          label="Avg steps (7d)"
-          value={avgSteps != null ? Math.round(avgSteps).toLocaleString() : "-"}
-          href="/trends/body"
-          delta={
-            percentChange(avgSteps, prevAvgSteps) && {
-              ...percentChange(avgSteps, prevAvgSteps)!,
-              goodDirection: "up",
-              periodLabel: "vs prev 7d",
-            }
-          }
-          sparkline={facts.slice(-28).map((f) => num(f.steps) ?? 0)}
-        />
-
-        <StatTile
-          label="Weight"
-          value={latestWeight ? `${num(latestWeight.weight_kg)!.toFixed(1)} kg` : "-"}
-          hint={latestWeight && latestWeight.day !== today ? `as of ${latestWeight.day}` : undefined}
-          href="/trends/body"
-          delta={
-            latestWeight && priorWeight && priorWeight.day !== latestWeight.day
-              ? {
-                  ...percentChange(num(latestWeight.weight_kg), num(priorWeight.weight_kg))!,
-                  goodDirection: "none",
-                  periodLabel: "recent",
-                }
-              : undefined
-          }
-          sparkline={weightFacts.slice(-30).map((f) => num(f.weight_kg) ?? 0)}
-        />
+      <div className="flex flex-wrap gap-2">
+        {[
+          { href: "/log/practice", label: "Practice" },
+          { href: "/log/match", label: "Match" },
+          { href: "/log/workout", label: "Workout" },
+          { href: "/log/readiness", label: "Readiness" },
+        ].map((action) => (
+          <Link
+            key={action.href}
+            href={action.href}
+            className={cn(
+              "flex items-center gap-1 rounded-full bg-card px-3.5 py-2 text-sm font-medium",
+              "ring-1 ring-foreground/10 transition-colors hover:bg-accent hover:text-brand"
+            )}
+          >
+            <Plus className="size-3.5" aria-hidden />
+            {action.label}
+          </Link>
+        ))}
       </div>
 
+      <section className="flex flex-col gap-3">
+        <SectionHeading href="/trends/load">This week</SectionHeading>
+        <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <WeekDotStrip
+            days={weekDays}
+            label={`${restDays === 0 ? "No rest days" : `${restDays} rest ${restDays === 1 ? "day" : "days"}`} - load ${Math.round(weeklyLoad)}`}
+          />
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <SectionHeading href="/trends/readiness">Trends</SectionHeading>
+        <MetricList>
+          <MetricRow
+            icon={Gauge}
+            label="Readiness"
+            reading={readiness.reading}
+            series={readiness.series}
+            format={(v) => String(Math.round(v))}
+            unit="/ 100"
+            href="/trends/readiness"
+          />
+          <MetricRow
+            icon={Activity}
+            label="Training load (7d)"
+            reading={loadReading}
+            series={loadSpark}
+            format={(v) => String(Math.round(v))}
+            unit="units"
+            note={
+              acwr != null
+                ? `${ACWR_BAND_LABEL[acwrBand(acwr)]} - ACWR ${acwr.toFixed(2)}`
+                : "Partly estimated - needs RPE on more sessions"
+            }
+            href="/trends/load"
+          />
+          <MetricRow
+            icon={Bed}
+            label="Sleep"
+            reading={sleep.reading}
+            series={sleep.series}
+            format={(v) => `${v.toFixed(1)}`}
+            unit="hours"
+            href="/trends/body"
+          />
+        </MetricList>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <SectionHeading href="/trends/body">Health monitor</SectionHeading>
+        <HealthTileGrid>
+          <HealthTile
+            icon={HeartPulse}
+            label="Resting HR"
+            reading={restingHr.reading}
+            format={(v) => String(Math.round(v))}
+            unit="bpm"
+            href="/trends/body"
+          />
+          <HealthTile
+            icon={Waves}
+            label="HRV"
+            reading={hrv.reading}
+            format={(v) => v.toFixed(1)}
+            unit="ms"
+            href="/trends/body"
+          />
+          <HealthTile
+            icon={Droplet}
+            label="SpO2"
+            reading={spo2.reading}
+            format={(v) => v.toFixed(1)}
+            unit="%"
+            href="/trends/body"
+          />
+          <HealthTile
+            icon={Footprints}
+            label="Steps"
+            reading={steps.reading}
+            format={(v) => Math.round(v).toLocaleString()}
+            href="/trends/body"
+          />
+          <HealthTile
+            icon={Flame}
+            label="Energy"
+            reading={calories.reading}
+            format={(v) => Math.round(v).toLocaleString()}
+            unit="kcal"
+            href="/trends/body"
+          />
+          <HealthTile
+            icon={Scale}
+            label="Weight"
+            reading={weight.reading}
+            format={(v) => v.toFixed(1)}
+            unit="kg"
+            href="/trends/body"
+          />
+        </HealthTileGrid>
+      </section>
+
       {unratedRecent.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Rate recent sessions</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+        <section className="flex flex-col gap-3">
+          <SectionHeading>Rate recent sessions</SectionHeading>
+          <div className="flex flex-col gap-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <p className="text-xs text-muted-foreground">
               {coverage.coverage != null
                 ? `Only ${Math.round(coverage.coverage * 100)}% of the last 28 days' sessions have a real intensity reading, so load is partly estimated.`
@@ -380,7 +524,10 @@ export default async function Home({
               Rating these makes the numbers above real.
             </p>
             {unratedRecent.slice(0, 4).map((s) => (
-              <div key={s.id} className="flex flex-col gap-1.5 border-t pt-3 first:border-t-0 first:pt-0">
+              <div
+                key={s.id}
+                className="flex flex-col gap-1.5 border-t pt-3 first:border-t-0 first:pt-0"
+              >
                 <Link href={`/sessions/${s.id}`} className="text-sm font-medium hover:underline">
                   {s.cardio_sessions?.focus ?? s.strength_sessions?.focus ?? sessionTypeLabel(s.type)}
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
@@ -393,56 +540,26 @@ export default async function Home({
                 <RpeQuickSet sessionId={s.id} currentRpe={null} syncedRpe={s.rpe} compact />
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section className="flex flex-col gap-3">
+        <SectionHeading href="/history">Activity</SectionHeading>
+        <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
           <ActivityHeatmap
             days={heatmapDays}
-            weeks={HEATMAP_WEEKS}
+            months={HEATMAP_MONTHS}
             metricLabel="training load"
             valueFormat={{ decimals: 0, prefix: "load " }}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <div className="flex flex-wrap gap-2">
-        <Link href="/log/practice" className={cn(buttonVariants({ size: "sm" }))}>
-          + Practice
-        </Link>
-        <Link href="/log/match" className={cn(buttonVariants({ size: "sm" }))}>
-          + Match
-        </Link>
-        <Link href="/log/workout" className={cn(buttonVariants({ size: "sm" }))}>
-          + Workout
-        </Link>
-        <Link
-          href="/log/readiness"
-          className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-        >
-          + Readiness check-in
-        </Link>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent workouts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SessionList
-            sessions={(sessions ?? []).map((s) => ({
-              ...s,
-              cardio_sessions: s.cardio_sessions as unknown as SessionRowData["cardio_sessions"],
-              strength_sessions: s.strength_sessions as unknown as SessionRowData["strength_sessions"],
-            }))}
-          />
-        </CardContent>
-      </Card>
+      <section className="flex flex-col gap-3">
+        <SectionHeading href="/history">Recent activity</SectionHeading>
+        <SessionList sessions={sessionRows} />
+      </section>
     </PageShell>
   )
 }

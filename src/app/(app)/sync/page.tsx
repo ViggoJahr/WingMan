@@ -55,7 +55,7 @@ export default async function SyncPage({
       />
 
       {synced && (
-        <p className="rounded-md bg-secondary p-2 text-sm text-secondary-foreground">
+        <p className="rounded-xl bg-status-good-soft p-3 text-sm text-status-good">
           Sync triggered.
         </p>
       )}

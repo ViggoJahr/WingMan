@@ -70,3 +70,18 @@ export async function fetchDailyFacts(
 
   return ((data ?? []) as unknown as DailyFact[]).filter((r): r is DailyFactRow => r.day != null)
 }
+
+/**
+ * One numeric column as a series, oldest first, gaps preserved as null.
+ *
+ * The nulls matter and must not be filtered here: `computeBaseline` drops them
+ * so a day without a reading cannot drag the mean, while `Sparkline` uses them
+ * to break the trace. Handing either of them a pre-compacted array would make a
+ * fortnight of missing HRV render as a confident straight line.
+ */
+export function factSeries(
+  rows: readonly DailyFactRow[],
+  key: keyof DailyFactRow
+): (number | null)[] {
+  return rows.map((row) => factNumber(row[key] as number | string | null))
+}
