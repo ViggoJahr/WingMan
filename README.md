@@ -1,4 +1,4 @@
-# Training Hub
+# Training Hub (Mostly vibe-coded)
 
 A personal training dashboard for a handball player. It pulls data from
 **TUGG** (team strength & conditioning platform) and **Google Health**
